@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  overscroll-behavior-y: none;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}

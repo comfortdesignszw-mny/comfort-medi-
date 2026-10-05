@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a2540" />
+      <stop offset="100%" stop-color="#0f395c" />
+    </linearGradient>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+  </defs>
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  
+  <!-- Outer subtle pulse ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#14b8a6" stroke-width="6" stroke-opacity="0.25" stroke-dasharray="8 8" />
+  
+  <!-- Heart Shield Base -->
+  <path d="M256 100 C190 40 100 110 100 190 C100 290 230 380 256 410 C282 380 412 290 412 190 C412 110 322 40 256 100 Z" fill="#ffffff" fill-opacity="0.08" />
+
+  <!-- Medical Cross with Rounded Ends -->
+  <rect x="226" y="146" width="60" height="220" rx="24" fill="url(#tealGrad)" />
+  <rect x="146" y="226" width="220" height="60" rx="24" fill="url(#tealGrad)" />
+
+  <!-- ECG Pulse line overlay across horizontal bar -->
+  <path d="M130 256 L190 256 L210 220 L235 290 L260 210 L280 270 L300 256 L382 256" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Pill Capsule Accent -->
+  <g transform="translate(340, 120) rotate(35)">
+    <rect x="-14" y="-32" width="28" height="64" rx="14" fill="#38bdf8" />
+    <path d="M-14 0 H14 V18 A14 14 0 0 1 -14 18 Z" fill="#ffffff" opacity="0.9" />
+  </g>
+</svg>

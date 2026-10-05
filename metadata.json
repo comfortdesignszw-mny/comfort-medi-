@@ -1,0 +1,6 @@
+{
+  "name": "Comfort Medi+",
+  "description": "Personal Health and Medication Management Platform with offline medical records, medication tracker, appointment booking, home care, and AI assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
