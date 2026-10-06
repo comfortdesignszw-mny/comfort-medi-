@@ -3,23 +3,32 @@ import { useAppStore } from '../../store/useAppStore';
 import { getTranslation } from '../../lib/translations';
 import { UserRole, Language, FontSize } from '../../types';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
+import { logout, ADMIN_EMAIL } from '../../lib/authService';
+import { AdminUserManagementModal } from '../auth/AdminUserManagementModal';
 import { 
   HeartPulse, 
   Globe, 
   Type, 
   Sun, 
-  Users, 
-  Stethoscope, 
   UserCheck, 
   Briefcase,
   ChevronDown,
-  X
+  X,
+  LogOut,
+  ShieldCheck,
+  Mail,
+  Phone,
+  Sparkles,
+  LogIn
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const currentUserRole = useAppStore(s => s.currentUserRole);
+  const firebaseUser = useAppStore(s => s.firebaseUser);
+  const setFirebaseUser = useAppStore(s => s.setFirebaseUser);
+  const setShowAuthModal = useAppStore(s => s.setShowAuthModal);
+  const showToast = useAppStore(s => s.showToast);
+
   const userProfile = useAppStore(s => s.userProfile);
-  const setRole = useAppStore(s => s.setRole);
   const language = useAppStore(s => s.language);
   const setLanguage = useAppStore(s => s.setLanguage);
   const fontSize = useAppStore(s => s.fontSize);
@@ -27,20 +36,44 @@ export const Header: React.FC = () => {
   const highContrast = useAppStore(s => s.highContrast);
   const setHighContrast = useAppStore(s => s.setHighContrast);
 
-  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showAccessMenu, setShowAccessMenu] = useState(false);
 
   const t = getTranslation(language);
 
-  const roles: { id: UserRole; label: string; icon: any }[] = [
-    { id: 'patient', label: 'Patient', icon: UserCheck },
-    { id: 'caregiver', label: 'Caregiver', icon: Users },
-    { id: 'doctor', label: 'Doctor/Clinician', icon: Stethoscope },
-    { id: 'admin', label: 'Admin', icon: Briefcase },
-  ];
+  // Formatted role display
+  const getRoleLabel = (role?: UserRole | string) => {
+    switch (role) {
+      case 'admin':
+        return 'Admin';
+      case 'doctor':
+        return 'Doctor/Clinician';
+      case 'caregiver':
+        return 'Caregiver';
+      case 'patient':
+      default:
+        return 'Patient';
+    }
+  };
 
-  const currentRoleLabel = roles.find(r => r.id === currentUserRole)?.label || currentUserRole;
+  const currentRole = firebaseUser?.role || 'patient';
+  const displayName = firebaseUser?.fullName || userProfile.fullName || 'Guest Patient';
+  const roleLabel = getRoleLabel(currentRole);
+  const isAdmin = currentRole === 'admin' || (firebaseUser?.email && firebaseUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      setFirebaseUser(null);
+      setShowAccountModal(false);
+      showToast('Signed out of session successfully', 'info');
+    } catch (err: any) {
+      console.error('Logout error:', err);
+      showToast('Failed to sign out cleanly', 'error');
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-[#0a2540] text-white border-b border-teal-900/40 shadow-md">
@@ -66,7 +99,7 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Action Controls & Top Right User + Role */}
+        {/* Action Controls & Top Right User Profile */}
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* PWA Install Button */}
           <PWAInstallButton compact />
@@ -76,7 +109,7 @@ export const Header: React.FC = () => {
             <button
               onClick={() => {
                 setShowLangMenu(!showLangMenu);
-                setShowRoleMenu(false);
+                setShowAccountModal(false);
                 setShowAccessMenu(false);
               }}
               className="flex items-center gap-1 px-2 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-semibold text-slate-200 transition"
@@ -129,96 +162,166 @@ export const Header: React.FC = () => {
           </div>
 
           {/* User Name & Role on Top Right Corner */}
-          <div className="relative">
+          {firebaseUser ? (
+            /* Logged in User Profile Avatar & Role */
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowAccountModal(!showAccountModal);
+                  setShowLangMenu(false);
+                  setShowAccessMenu(false);
+                }}
+                className={`flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-2xl border text-white shadow-sm transition active:scale-95 ${
+                  isAdmin 
+                    ? 'bg-amber-950/60 hover:bg-amber-900/70 border-amber-500/60' 
+                    : 'bg-slate-800/90 hover:bg-slate-700/90 border-teal-500/40'
+                }`}
+                title="View Authenticated Profile & Account"
+              >
+                <div className={`w-7 h-7 rounded-xl font-black text-xs flex items-center justify-center shrink-0 shadow-sm ${
+                  isAdmin
+                    ? 'bg-gradient-to-tr from-amber-400 to-amber-200 text-slate-950'
+                    : 'bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950'
+                }`}>
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left leading-tight max-w-[85px] xs:max-w-[125px] sm:max-w-[160px]">
+                  <div className="text-xs font-bold text-slate-100 truncate">
+                    {displayName}
+                  </div>
+                  <div className={`text-[10px] font-semibold truncate ${isAdmin ? 'text-amber-300' : 'text-teal-300'}`}>
+                    {roleLabel}
+                  </div>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              </button>
+
+              {/* Authenticated Account Profile Window */}
+              {showAccountModal && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm animate-in fade-in" 
+                    onClick={() => setShowAccountModal(false)} 
+                  />
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 mt-2 w-72 sm:w-80 rounded-3xl bg-white text-slate-900 shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in zoom-in-95 space-y-3"
+                  >
+                    {/* Header */}
+                    <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-10 h-10 rounded-2xl font-black text-sm flex items-center justify-center text-slate-950 shadow-md ${
+                          isAdmin
+                            ? 'bg-gradient-to-tr from-amber-400 to-amber-200'
+                            : 'bg-gradient-to-tr from-teal-500 to-emerald-400'
+                        }`}>
+                          {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-black text-slate-900 truncate">{displayName}</h4>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider mt-0.5 ${
+                            isAdmin 
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                              : 'bg-teal-100 text-teal-800 border border-teal-200'
+                          }`}>
+                            {roleLabel}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShowAccountModal(false)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                        title="Close window"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Account Details */}
+                    <div className="space-y-1.5 text-xs bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
+                      {firebaseUser.email && (
+                        <div className="flex items-center gap-2 text-slate-600 truncate">
+                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{firebaseUser.email}</span>
+                        </div>
+                      )}
+                      {firebaseUser.phoneNumber && (
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{firebaseUser.phoneNumber}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-slate-500 text-[11px] pt-1 border-t border-slate-200/60">
+                        <ShieldCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <span>Auth: <strong className="capitalize">{firebaseUser.authProvider || 'Firebase'}</strong></span>
+                      </div>
+                    </div>
+
+                    {/* Admin RBAC Upgrade Button (Only for Admin) */}
+                    {isAdmin && (
+                      <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-bold">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Database Administrator</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 leading-snug">
+                          You have authority to upgrade other users from Patient to Doctor, Caregiver, or Admin.
+                        </p>
+                        <button
+                          onClick={() => {
+                            setShowAccountModal(false);
+                            setShowAdminModal(true);
+                          }}
+                          className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
+                        >
+                          <Briefcase className="w-3.5 h-3.5" />
+                          <span>Manage User Roles (RBAC)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Sign Out Button */}
+                    <div className="pt-2 border-t border-slate-100 flex gap-2">
+                      <button
+                        onClick={handleSignOut}
+                        className="flex-1 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center gap-1.5 border border-rose-200 transition active:scale-95"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                      <button
+                        onClick={() => setShowAccountModal(false)}
+                        className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            /* Not logged in: Prominent Sign In button */
             <button
               onClick={() => {
-                setShowRoleMenu(!showRoleMenu);
+                setShowAuthModal(true);
                 setShowLangMenu(false);
                 setShowAccessMenu(false);
               }}
-              className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-2xl bg-slate-800/90 hover:bg-slate-700/90 border border-teal-500/40 text-white shadow-sm transition active:scale-95"
-              title="Switch Active Role / Viewpoint"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs shadow-md shadow-teal-500/20 active:scale-95 transition"
+              title="Sign in with Google, Email, or Phone"
             >
-              <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-teal-500 to-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center shrink-0 shadow-sm">
-                {userProfile.fullName ? userProfile.fullName.charAt(0) : 'U'}
-              </div>
-              <div className="text-left leading-tight max-w-[85px] xs:max-w-[125px] sm:max-w-[160px]">
-                <div className="text-xs font-bold text-slate-100 truncate">
-                  {userProfile.fullName}
-                </div>
-                <div className="text-[10px] font-semibold text-teal-300 truncate">
-                  {currentRoleLabel}
-                </div>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <LogIn className="w-3.5 h-3.5 text-slate-950" />
+              <span>Sign In</span>
             </button>
-
-            {showRoleMenu && (
-              <>
-                <div 
-                  className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px] animate-in fade-in" 
-                  onClick={() => setShowRoleMenu(false)} 
-                />
-                <div 
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute right-0 mt-2 w-64 rounded-3xl bg-white text-slate-900 shadow-2xl border border-slate-200 p-3 z-50 animate-in fade-in zoom-in-95"
-                >
-                  <div className="flex items-start justify-between pb-2.5 border-b border-slate-100">
-                    <div className="min-w-0 pr-2">
-                      <p className="text-xs font-bold text-slate-900 truncate">{userProfile.fullName}</p>
-                      <p className="text-[10px] text-teal-700 font-semibold">{userProfile.phoneNumber}</p>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 mt-1 block">
-                        Switch Active Role
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setShowRoleMenu(false)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-                      title="Close window"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="py-1">
-                    {roles.map((r) => {
-                      const Icon = r.icon;
-                      const isSelected = currentUserRole === r.id;
-                      return (
-                        <button
-                          key={r.id}
-                          onClick={() => {
-                            setRole(r.id);
-                            setShowRoleMenu(false);
-                          }}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition ${
-                            isSelected ? 'bg-teal-50 text-teal-800 font-bold' : 'hover:bg-slate-50 text-slate-700'
-                          }`}
-                        >
-                          <Icon className={`w-4 h-4 ${isSelected ? 'text-teal-600' : 'text-slate-400'}`} />
-                          <span>{r.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="pt-2 border-t border-slate-100">
-                    <button
-                      onClick={() => setShowRoleMenu(false)}
-                      className="w-full py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600 transition"
-                    >
-                      Cancel / Close
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          )}
 
           {/* Text Size & Contrast Display Settings */}
           <div className="relative">
             <button
               onClick={() => {
                 setShowAccessMenu(!showAccessMenu);
-                setShowRoleMenu(false);
+                setShowAccountModal(false);
                 setShowLangMenu(false);
               }}
               className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-200 transition"
@@ -283,6 +386,13 @@ export const Header: React.FC = () => {
                       />
                     </button>
                   </div>
+
+                  <button
+                    onClick={() => setShowAccessMenu(false)}
+                    className="w-full py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold transition"
+                  >
+                    Close Settings
+                  </button>
                 </div>
               </>
             )}
@@ -291,6 +401,12 @@ export const Header: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Admin User Management Modal */}
+      <AdminUserManagementModal 
+        isOpen={showAdminModal} 
+        onClose={() => setShowAdminModal(false)} 
+      />
     </header>
   );
 };

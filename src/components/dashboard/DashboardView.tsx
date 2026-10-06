@@ -18,7 +18,10 @@ import {
   Bot, 
   PlusCircle,
   MessageSquare,
-  X
+  X,
+  CalendarCheck,
+  CheckCircle2,
+  ListTodo
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -36,6 +39,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateTab, onO
   const snoozeMedication = useAppStore(s => s.snoozeMedication);
   const skipMedication = useAppStore(s => s.skipMedication);
   const appointments = useAppStore(s => s.appointments);
+  const carePlan = useAppStore(s => s.carePlan);
   const vitals = useAppStore(s => s.vitals);
   const emergencyContacts = useAppStore(s => s.emergencyContacts);
   const allergies = useAppStore(s => s.allergies);
@@ -55,6 +59,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateTab, onO
   // Next appointment
   const nextAppointment = appointments.find(a => a.status === 'confirmed' || a.status === 'booked');
 
+  // Auto-detected Appointment and Task counts
+  const scheduledAppointmentsCount = appointments.filter(a => a.status === 'confirmed' || a.status === 'booked').length;
+  const successfulAppointmentsCount = appointments.filter(a => a.status === 'completed').length;
+  const totalTasksCount = carePlan?.tasks?.length || 0;
+  const completedTasksCount = carePlan?.tasks?.filter(t => t.completed)?.length || 0;
+  const pendingTasksCount = totalTasksCount - completedTasksCount;
+
   return (
     <div className="space-y-5 pb-24 animate-in fade-in duration-150">
       
@@ -71,57 +82,85 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateTab, onO
         </div>
       )}
 
-      {/* Patient Header Card */}
-      <div className="rounded-3xl bg-gradient-to-br from-[#0a2540] via-[#0f3458] to-[#0d9488] text-white p-5 sm:p-6 shadow-xl relative overflow-hidden">
+      {/* Patient Header Card - Clean Hero Section */}
+      <div className="rounded-3xl bg-gradient-to-br from-[#0a2540] via-[#0f3458] to-[#0d9488] text-white p-6 shadow-xl relative overflow-hidden">
         {/* Abstract medical graphic lines */}
         <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none">
           <Heart className="w-48 h-48 -mr-10 -mb-10 text-white" />
         </div>
 
-        <div className="relative z-10">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="text-xs font-semibold text-teal-200 uppercase tracking-wider">
-                Personal Health &amp; Vitals Overview
-              </span>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-0.5">
-                Clinical Health Dashboard
-              </h1>
-              <p className="text-xs text-slate-200 mt-1 flex flex-wrap items-center gap-2">
-                <span>{userProfile.city}, Zimbabwe</span>
-                <span>•</span>
-                <span>Blood Type: <strong className="text-teal-200 font-bold">{userProfile.bloodType}</strong></span>
-                <span>•</span>
-                <span>BMI: <strong>{userProfile.bmi}</strong></span>
-                <span>•</span>
-                <span>{userProfile.insuranceProvider}</span>
-              </p>
-            </div>
-
-            {/* Emergency SOS Trigger */}
-            <button
-              onClick={() => setShowEmergencyModal(true)}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-lg shadow-rose-600/30 active:scale-95 transition"
-            >
-              <PhoneCall className="w-3.5 h-3.5" />
-              <span>SOS Emergency</span>
-            </button>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span className="text-xs font-semibold text-teal-200 uppercase tracking-wider block">
+              Personal Health and Vitals Overview
+            </span>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white mt-1">
+              Clinical Health Dashboard
+            </h1>
           </div>
 
-          {/* Quick Health Tags */}
-          <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-white/10">
-            {chronicConditions.map((c) => (
-              <span key={c.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/10 backdrop-blur-sm text-[11px] font-semibold text-teal-100">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-300" />
-                {c.conditionName}
-              </span>
-            ))}
-            {allergies.map((a) => (
-              <span key={a.id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/20 backdrop-blur-sm text-[11px] font-semibold text-rose-200 border border-rose-500/30">
-                <ShieldAlert className="w-3 h-3 text-rose-300" />
-                Allergy: {a.allergen}
-              </span>
-            ))}
+          {/* Emergency SOS Trigger */}
+          <button
+            onClick={() => setShowEmergencyModal(true)}
+            className="self-start sm:self-center shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-lg shadow-rose-600/30 active:scale-95 transition"
+            title="Open Emergency Contacts"
+          >
+            <PhoneCall className="w-4 h-4 animate-pulse" />
+            <span>SOS Emergency</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Key Healthcare Metrics: Scheduled Appointments, Successful Appointments & HomeCare Tasks */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        {/* Metric 1: Scheduled Appointments */}
+        <div 
+          onClick={() => onNavigateTab('appointments')}
+          className="rounded-2xl bg-white p-4 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-teal-500/50 hover:shadow-md cursor-pointer transition active:scale-98"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center shrink-0">
+            <CalendarCheck className="w-6 h-6 text-teal-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl font-black text-slate-900 leading-tight">
+              {scheduledAppointmentsCount}
+            </p>
+            <p className="text-xs font-bold text-slate-700 truncate">Appointments Scheduled</p>
+            <p className="text-[10px] text-slate-400">Auto-detected from Appointments</p>
+          </div>
+        </div>
+
+        {/* Metric 2: Successful Appointments */}
+        <div 
+          onClick={() => onNavigateTab('appointments')}
+          className="rounded-2xl bg-white p-4 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-emerald-500/50 hover:shadow-md cursor-pointer transition active:scale-98"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl font-black text-emerald-700 leading-tight">
+              {successfulAppointmentsCount}
+            </p>
+            <p className="text-xs font-bold text-slate-700 truncate">Successful Appointments</p>
+            <p className="text-[10px] text-slate-400">Completed consultations</p>
+          </div>
+        </div>
+
+        {/* Metric 3: HomeCare Tasks */}
+        <div 
+          onClick={() => onNavigateTab('homecare')}
+          className="rounded-2xl bg-white p-4 border border-slate-200/80 shadow-sm flex items-center gap-3.5 hover:border-cyan-500/50 hover:shadow-md cursor-pointer transition active:scale-98"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-600 flex items-center justify-center shrink-0">
+            <ListTodo className="w-6 h-6 text-cyan-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl font-black text-slate-900 leading-tight">
+              {totalTasksCount} <span className="text-xs font-bold text-slate-500">Tasks</span>
+            </p>
+            <p className="text-xs font-bold text-slate-700 truncate">HomeCare Section</p>
+            <p className="text-[10px] text-slate-400">{completedTasksCount} done • {pendingTasksCount} remaining</p>
           </div>
         </div>
       </div>

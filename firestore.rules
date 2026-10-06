@@ -1,0 +1,111 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSystemAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'comfort.designszw@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAssignedDoctor(patientId) {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/assignments/$(request.auth.uid + '_' + patientId))
+      );
+    }
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.fullName is string && data.fullName.size() <= 128 &&
+             data.role in ['admin', 'patient', 'caregiver', 'doctor'] &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
+             (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 32));
+    }
+
+    // Admins marker collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isSystemAdmin() && isValidId(adminId);
+    }
+
+    // Patient Assignments (Admin assigns patients to doctors/clinicians)
+    match /assignments/{assignmentId} {
+      allow get: if isSignedIn() && (
+        isSystemAdmin() ||
+        resource.data.doctorId == request.auth.uid ||
+        resource.data.patientId == request.auth.uid
+      );
+      allow list: if isSignedIn();
+      allow write: if isSystemAdmin() && isValidId(assignmentId);
+    }
+
+    // Clinical Staff Audit Logs (Admin monitors staff activity; immutable)
+    match /auditLogs/{logId} {
+      allow read: if isSystemAdmin();
+      allow create: if isSignedIn() && isValidId(logId);
+      allow update, delete: if false;
+    }
+
+    // User RBAC profiles & clinical data
+    match /users/{userId} {
+      // Patients read own profile; assigned doctors and admins can read
+      allow get: if (isOwner(userId) || isSystemAdmin() || isAssignedDoctor(userId)) && isValidId(userId);
+      allow list: if isSystemAdmin() || isSignedIn();
+
+      // Creation: comfort.designszw@gmail.com can be admin or patient; others default to patient
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.uid == request.auth.uid &&
+        (
+          (request.auth.token.email == 'comfort.designszw@gmail.com') ||
+          (request.resource.data.role == 'patient')
+        );
+
+      // Updates: Admin can update any field (including role); Owner can update profile fields but not role/uid
+      allow update: if isSignedIn() && isValidId(userId) && isValidUser(request.resource.data) && (
+        isSystemAdmin() ||
+        (
+          isOwner(userId) &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'fullName', 'phoneNumber', 'email', 'updatedAt', 'authProvider',
+            'city', 'bloodType', 'bmi', 'insuranceProvider', 'emergencyContacts'
+          ])
+        )
+      );
+
+      // Deletion (Right to be Forgotten): Owner or Admin can delete profile
+      allow delete: if (isOwner(userId) || isSystemAdmin()) && isValidId(userId);
+
+      // Scalable Subcollections per patient: vitals, medications, appointments, records, tasks, progressReports
+      match /{subcollection}/{docId} {
+        allow read: if (isOwner(userId) || isSystemAdmin() || isAssignedDoctor(userId)) && isValidId(docId);
+        allow write: if (isOwner(userId) || isSystemAdmin() || isAssignedDoctor(userId)) && isValidId(docId);
+      }
+    }
+
+    // Test connection endpoint
+    match /test/{docId} {
+      allow read: if true;
+    }
+  }
+}

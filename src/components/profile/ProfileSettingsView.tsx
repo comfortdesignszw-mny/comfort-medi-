@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { exportHealthDataJSON, triggerBiometricAuthentication } from '../../lib/security';
 import { generateWhatsAppLink } from '../../lib/whatsappGateway';
+import { LegalModal } from '../legal/LegalModal';
 import { 
   User, 
   ShieldCheck, 
@@ -15,11 +16,20 @@ import {
   AlertCircle, 
   X,
   MessageSquare,
-  KeyRound
+  KeyRound,
+  Scale,
+  Trash2,
+  Database,
+  ShieldAlert,
+  Sparkles,
+  RefreshCw,
+  Loader2
 } from 'lucide-react';
 
 export const ProfileSettingsView: React.FC = () => {
   const userProfile = useAppStore(s => s.userProfile);
+  const chronicConditions = useAppStore(s => s.chronicConditions);
+  const allergies = useAppStore(s => s.allergies);
   const updateProfile = useAppStore(s => s.updateProfile);
   const emergencyContacts = useAppStore(s => s.emergencyContacts);
   const addEmergencyContact = useAppStore(s => s.addEmergencyContact);
@@ -31,11 +41,17 @@ export const ProfileSettingsView: React.FC = () => {
   const whatsappNotifications = useAppStore(s => s.whatsappNotifications);
   const restoreFromBackup = useAppStore(s => s.restoreFromBackup);
   const showToast = useAppStore(s => s.showToast);
+  const exportAllUserDataJSON = useAppStore(s => s.exportAllUserDataJSON);
+  const eraseAllUserDataAndReset = useAppStore(s => s.eraseAllUserDataAndReset);
+  const loadClinicalStarterTemplate = useAppStore(s => s.loadClinicalStarterTemplate);
   const fullStoreState = useAppStore.getState();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'emergency' | 'security' | 'audit_whatsapp'>('profile');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(userProfile);
+  const [showLegalModal, setShowLegalModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // New Emergency Contact Form
   const [showAddContactModal, setShowAddContactModal] = useState(false);
@@ -299,6 +315,43 @@ export const ProfileSettingsView: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Chronic Conditions & Known Allergies section in Profile */}
+          <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Chronic Diagnoses &amp; Clinical Conditions
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {chronicConditions.map((c) => (
+                  <div key={c.id} className="p-2.5 rounded-2xl bg-teal-50 border border-teal-200 text-teal-900 text-xs flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-teal-500" />
+                    <div>
+                      <strong className="block font-bold">{c.conditionName}</strong>
+                      <span className="text-[10px] text-teal-700">{c.treatmentRegimen}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Documented Allergies &amp; Severe Reactions
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {allergies.map((a) => (
+                  <div key={a.id} className="p-2.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    <div>
+                      <strong className="block font-bold">Allergy: {a.allergen}</strong>
+                      <span className="text-[10px] text-rose-700">{a.reaction} ({a.severity})</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -451,27 +504,44 @@ export const ProfileSettingsView: React.FC = () => {
             )}
           </div>
 
-          {/* Backup & Recovery */}
-          <div className="rounded-3xl bg-white p-5 border border-slate-200/80 shadow-sm space-y-3 text-xs">
-            <h4 className="font-bold text-slate-900">Encrypted Backup &amp; Recovery</h4>
-            <p className="text-slate-500">
-              Export your entire medical record history into an encrypted JSON file for safekeeping or transfer to another phone.
+          {/* User Data Control, Portability & Privacy Rights */}
+          <div className="rounded-3xl bg-white p-5 border border-slate-200/80 shadow-sm space-y-4 text-xs">
+            <div className="flex items-center gap-2.5">
+              <Database className="w-5 h-5 text-teal-600" />
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">User Data Control &amp; Privacy Rights</h4>
+                <p className="text-[11px] text-slate-500">You have complete ownership of your health and medical records</p>
+              </div>
+            </div>
+
+            <p className="text-slate-600 leading-relaxed">
+              In healthcare, your personal medical records are confidential and legally protected. Under data protection regulations, you can export your complete clinical data history as a JSON file, or permanently erase your data across all cloud servers.
             </p>
-            <div className="flex flex-wrap gap-2 pt-1">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {/* Export Full JSON Backup */}
               <button
-                onClick={() => {
-                  exportHealthDataJSON(fullStoreState, `comfort-medi-plus-export-${new Date().toISOString().split('T')[0]}.json`);
-                  showToast('Medical backup downloaded successfully', 'success');
-                }}
-                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold flex items-center gap-1.5 shadow-sm transition"
+                onClick={exportAllUserDataJSON}
+                className="p-3 rounded-2xl bg-teal-50 border border-teal-200 hover:bg-teal-100/70 text-teal-900 font-bold flex items-center gap-2.5 transition active:scale-98 text-left"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Backup (JSON)</span>
+                <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block text-xs font-bold text-teal-950">Export Backup (JSON)</span>
+                  <span className="text-[10px] text-teal-700">Download complete health history</span>
+                </div>
               </button>
 
-              <label className="cursor-pointer px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold flex items-center gap-1.5 transition">
-                <Upload className="w-3.5 h-3.5 text-teal-600" />
-                <span>Restore from JSON</span>
+              {/* Restore from JSON */}
+              <label className="cursor-pointer p-3 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold flex items-center gap-2.5 transition active:scale-98 text-left">
+                <div className="w-8 h-8 rounded-xl bg-slate-700 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block text-xs font-bold text-slate-900">Restore from JSON</span>
+                  <span className="text-[10px] text-slate-500">Import valid medical backup file</span>
+                </div>
                 <input
                   type="file"
                   accept=".json,application/json"
@@ -479,6 +549,46 @@ export const ProfileSettingsView: React.FC = () => {
                   className="hidden"
                 />
               </label>
+
+              {/* View Terms of Use & Privacy Policy */}
+              <button
+                onClick={() => setShowLegalModal(true)}
+                className="p-3 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-800 font-bold flex items-center gap-2.5 transition active:scale-98 text-left"
+              >
+                <div className="w-8 h-8 rounded-xl bg-[#0a2540] text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Scale className="w-4 h-4 text-teal-400" />
+                </div>
+                <div>
+                  <span className="block text-xs font-bold text-slate-900">Terms of Use &amp; Privacy Policy</span>
+                  <span className="text-[10px] text-slate-500">Read statutory compliance &amp; rights</span>
+                </div>
+              </button>
+
+              {/* Reset & Delete All User Data (Right to be Forgotten) */}
+              <button
+                onClick={() => setShowDeleteConfirmModal(true)}
+                className="p-3 rounded-2xl bg-rose-50 border border-rose-200 hover:bg-rose-100/70 text-rose-900 font-bold flex items-center gap-2.5 transition active:scale-98 text-left"
+              >
+                <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block text-xs font-bold text-rose-950">Reset &amp; Erase All Data</span>
+                  <span className="text-[10px] text-rose-700">Right to be forgotten (Permanent)</span>
+                </div>
+              </button>
+            </div>
+
+            {/* Optional Clinical Template Loader */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">Need starter clinical data for testing?</span>
+              <button
+                onClick={loadClinicalStarterTemplate}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-[11px] font-semibold flex items-center gap-1.5 transition"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Load Clinical Starter Template</span>
+              </button>
             </div>
           </div>
         </div>

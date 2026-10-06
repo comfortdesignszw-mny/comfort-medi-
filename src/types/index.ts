@@ -1,5 +1,16 @@
 export type UserRole = 'patient' | 'caregiver' | 'doctor' | 'admin';
 
+export interface FirebaseUserRecord {
+  uid: string;
+  email?: string;
+  phoneNumber?: string;
+  fullName: string;
+  role: UserRole;
+  authProvider: 'google' | 'password' | 'phone';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type Language = 'en' | 'sn' | 'nd'; // English, Shona, Ndebele
 
 export type FontSize = 'normal' | 'large' | 'xlarge';
@@ -242,7 +253,22 @@ export interface SyncQueueItem {
 export interface AuditLog {
   id: string;
   action: string;
-  category: 'AUTH' | 'MEDICATION' | 'RECORD' | 'APPOINTMENT' | 'CARE' | 'SECURITY';
+  category: 'AUTH' | 'MEDICATION' | 'RECORD' | 'APPOINTMENT' | 'CARE' | 'SECURITY' | 'CLINICAL';
   timestamp: string;
   details?: string;
+  actorId?: string;
+  actorName?: string;
 }
+
+export interface PatientAssignment {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  patientId: string;
+  patientName: string;
+  assignedBy: string;
+  assignedAt: string;
+  status: 'active' | 'revoked';
+  clinicalNotes?: string;
+}
+

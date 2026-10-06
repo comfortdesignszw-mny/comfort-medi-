@@ -1,0 +1,322 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control (Admin, Patient, Caregiver, Doctor/Clinician).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth User UID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address or synthetic phone email",
+          "maxLength": 256
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "User mobile phone number",
+          "maxLength": 32
+        },
+        "fullName": {
+          "type": "string",
+          "description": "User full legal or preferred name",
+          "maxLength": 128
+        },
+        "role": {
+          "type": "string",
+          "description": "User RBAC role: admin, patient, caregiver, or doctor",
+          "enum": ["admin", "patient", "caregiver", "doctor"]
+        },
+        "authProvider": {
+          "type": "string",
+          "description": "Method used to authenticate: google, password, or phone",
+          "enum": ["google", "password", "phone"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account registration timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Profile update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "role", "fullName"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Marker document for verified administrators.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Admin UID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "Admin email address",
+          "maxLength": 256
+        },
+        "assignedAt": {
+          "type": "string",
+          "description": "Timestamp when admin privilege was granted",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "PatientAssignment": {
+      "title": "PatientAssignment",
+      "description": "Links a Patient to a Doctor, Clinician, or Healthcare Worker with access authorization.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Assignment unique identifier",
+          "maxLength": 128
+        },
+        "doctorId": {
+          "type": "string",
+          "description": "Assigned doctor or clinician UID",
+          "maxLength": 128
+        },
+        "doctorName": {
+          "type": "string",
+          "description": "Doctor full name",
+          "maxLength": 128
+        },
+        "patientId": {
+          "type": "string",
+          "description": "Assigned patient UID",
+          "maxLength": 128
+        },
+        "patientName": {
+          "type": "string",
+          "description": "Patient full name",
+          "maxLength": 128
+        },
+        "assignedBy": {
+          "type": "string",
+          "description": "Administrator UID who authorized the assignment",
+          "maxLength": 128
+        },
+        "assignedAt": {
+          "type": "string",
+          "description": "Timestamp of assignment",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "description": "Assignment status: active or revoked",
+          "enum": ["active", "revoked"]
+        },
+        "clinicalNotes": {
+          "type": "string",
+          "description": "Special clinical oversight instructions",
+          "maxLength": 1000
+        }
+      },
+      "required": ["id", "doctorId", "patientId", "assignedBy", "status"]
+    },
+    "VitalReading": {
+      "title": "VitalReading",
+      "description": "Clinical and patient-reported vitals measurements.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "systolicBp": {
+          "type": "number"
+        },
+        "diastolicBp": {
+          "type": "number"
+        },
+        "pulseRate": {
+          "type": "number"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "bloodSugar": {
+          "type": "number"
+        },
+        "recordedBy": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "required": ["id", "userId", "date", "recordedBy"]
+    },
+    "Medication": {
+      "title": "Medication",
+      "description": "Prescribed medication regimen.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "strength": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "dosage": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "frequency": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "remainingUnits": {
+          "type": "number"
+        },
+        "totalPrescribedUnits": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "userId", "name", "active"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Scheduled clinical consultation or visit.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "facilityName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "providerName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "date": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "time": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "status": {
+          "type": "string",
+          "enum": ["booked", "confirmed", "checked_in", "completed", "cancelled", "rescheduled"]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "required": ["id", "userId", "facilityName", "date", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Security and clinical staff action audit trail.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "actorName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "action": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "category": {
+          "type": "string",
+          "enum": ["AUTH", "CLINICAL", "MEDICATION", "RECORD", "APPOINTMENT", "SECURITY"]
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "required": ["id", "action", "category", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user RBAC profiles and credentials."
+    },
+    "/admins/{adminId}": {
+      "schema": "Admin",
+      "description": "List of system administrators."
+    },
+    "/assignments/{assignmentId}": {
+      "schema": "PatientAssignment",
+      "description": "Admin-assigned patient-to-doctor relationships."
+    },
+    "/users/{userId}/vitals/{vitalId}": {
+      "schema": "VitalReading",
+      "description": "Patient vitals readings."
+    },
+    "/users/{userId}/medications/{medicationId}": {
+      "schema": "Medication",
+      "description": "Patient medications."
+    },
+    "/users/{userId}/appointments/{appointmentId}": {
+      "schema": "Appointment",
+      "description": "Patient appointments."
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Clinical staff monitoring and security audit logs."
+    }
+  }
+}
