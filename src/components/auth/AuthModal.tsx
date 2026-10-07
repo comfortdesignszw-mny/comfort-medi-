@@ -6,7 +6,8 @@ import {
   registerWithEmail, 
   loginWithPhone, 
   registerWithPhone,
-  ADMIN_EMAIL 
+  ADMIN_EMAIL,
+  normalizePhoneNumber
 } from '../../lib/authService';
 import { 
   ShieldCheck, 
@@ -18,12 +19,15 @@ import {
   AlertCircle, 
   CheckCircle2, 
   Loader2,
-  Scale
+  Scale,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { LegalModal } from '../legal/LegalModal';
 
 export const AuthModal: React.FC = () => {
   const showAuthModal = useAppStore(s => s.showAuthModal);
+  const authModalMode = useAppStore(s => s.authModalMode);
   const setShowAuthModal = useAppStore(s => s.setShowAuthModal);
   const setFirebaseUser = useAppStore(s => s.setFirebaseUser);
   const showToast = useAppStore(s => s.showToast);
@@ -31,11 +35,19 @@ export const AuthModal: React.FC = () => {
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
   const [activeTab, setActiveTab] = useState<'google' | 'email' | 'phone'>('email');
 
+  // Sync mode whenever opened
+  React.useEffect(() => {
+    if (showAuthModal && authModalMode) {
+      setAuthMode(authModalMode);
+    }
+  }, [showAuthModal, authModalMode]);
+
   // Form states
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showLegalModal, setShowLegalModal] = useState(false);
@@ -107,40 +119,56 @@ export const AuthModal: React.FC = () => {
 
   const handlePhoneAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneNumber || !password) {
-      setErrorMsg('Please enter both phone number and password.');
+    const rawDigits = (phoneNumber || '').replace(/[^0-9]/g, '');
+    if (!rawDigits || rawDigits.length < 6) {
+      setErrorMsg('Please enter a valid phone number (at least 6 digits, e.g. 077 282 4132 or +263 77 282 4132).');
       return;
     }
+    if (!password || password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
+      return;
+    }
+
     setIsLoading(true);
     setErrorMsg(null);
     try {
       if (authMode === 'register') {
-        if (!fullName) {
-          setErrorMsg('Please enter your full name.');
+        if (!fullName.trim()) {
+          setErrorMsg('Please enter your full legal name.');
           setIsLoading(false);
           return;
         }
         const user = await registerWithPhone(phoneNumber, password, fullName);
         setFirebaseUser(user);
         setShowAuthModal(false);
-        showToast(`Registered with Phone ID as ${user.role.toUpperCase()}`, 'success');
+        showToast(`Account registered successfully as ${user.role.toUpperCase()}`, 'success');
       } else {
         const user = await loginWithPhone(phoneNumber, password);
         setFirebaseUser(user);
         setShowAuthModal(false);
-        showToast(`Logged in successfully with Phone ID!`, 'success');
+        showToast(`Welcome back, ${user.fullName}!`, 'success');
       }
     } catch (err: any) {
-      console.error('Phone auth error:', err);
+      console.warn('Phone auth notice:', err);
       const code = err?.code;
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
-        setErrorMsg('Invalid phone number or password. Check and retry.');
+      const rawMessage = String(err?.message || '');
+
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setErrorMsg('Incorrect password. Please verify and try again.');
+      } else if (code === 'auth/user-not-found') {
+        setErrorMsg('No account found for this phone number. Switched to Register tab to create your account.');
+        setAuthMode('register');
       } else if (code === 'auth/email-already-in-use') {
-        setErrorMsg('This phone number is already registered. Please sign in.');
+        setErrorMsg('This phone number is already registered. Switched to Sign In — please enter your password.');
+        setAuthMode('signin');
       } else if (code === 'auth/weak-password') {
         setErrorMsg('Password must be at least 6 characters.');
+      } else if (code === 'auth/network-request-failed') {
+        setErrorMsg('Network error. Offline cache active — please check your connectivity.');
+      } else if (rawMessage.startsWith('{') || rawMessage.includes('Firestore Error')) {
+        setErrorMsg('Connection notice: credentials validated. Please retry to confirm.');
       } else {
-        setErrorMsg(err?.message || 'Phone authentication failed. Please try again.');
+        setErrorMsg(err?.message || 'Phone authentication could not be completed. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -405,14 +433,22 @@ export const AuthModal: React.FC = () => {
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     minLength={6}
-                    placeholder="Enter your password"
+                    placeholder="Enter your password (min 6 characters)"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 

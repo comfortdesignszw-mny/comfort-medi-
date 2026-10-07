@@ -778,6 +778,119 @@ export const ProfileSettingsView: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL: RESET & ERASE ALL DATA CONFIRMATION */}
+      {showDeleteConfirmModal && (
+        <div 
+          onClick={() => !isDeleting && setShowDeleteConfirmModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-rose-200 space-y-4"
+          >
+            <div className="flex items-start justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-rose-950">Reset &amp; Erase All Data?</h3>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-rose-600">
+                    Right to be Forgotten (Permanent)
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => !isDeleting && setShowDeleteConfirmModal(false)} 
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600"
+                disabled={isDeleting}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-rose-950">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Warning: This action cannot be reversed.</span>
+                </p>
+                <p className="text-[11px] text-rose-800">
+                  All clinical vitals, medication logs, appointments, medical records, home care tasks, and local device keys will be permanently erased from this browser and cloud databases.
+                </p>
+              </div>
+
+              <p>
+                Under the <strong>Zimbabwe Data Protection Act [Chapter 11:12]</strong>, you have absolute ownership and sovereignty over your healthcare data.
+              </p>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-slate-800 text-[11px]">Recommended: Save a copy first</div>
+                  <div className="text-[10px] text-slate-500">Download your records before resetting</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={exportAllUserDataJSON}
+                  className="px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-[11px] font-bold flex items-center gap-1 transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export JSON</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirmModal(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-50 transition text-xs"
+              >
+                Cancel &amp; Keep Data
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  setIsDeleting(true);
+                  try {
+                    await eraseAllUserDataAndReset();
+                    setShowDeleteConfirmModal(false);
+                    showToast('All your user and health data has been permanently wiped.', 'info');
+                  } catch (err) {
+                    console.error('Delete error:', err);
+                    showToast('Failed to completely erase data', 'error');
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition flex items-center justify-center gap-1.5 text-xs shadow-md shadow-rose-600/20 active:scale-95"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Erasing Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Permanent Erasure</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: LEGAL & DATA PRIVACY POLICY */}
+      <LegalModal
+        isOpen={showLegalModal}
+        onClose={() => setShowLegalModal(false)}
+        defaultTab="rights"
+      />
+
     </div>
   );
 };

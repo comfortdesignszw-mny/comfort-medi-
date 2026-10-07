@@ -5,30 +5,45 @@ import { UserRole, Language, FontSize } from '../../types';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
 import { logout, ADMIN_EMAIL } from '../../lib/authService';
 import { AdminUserManagementModal } from '../auth/AdminUserManagementModal';
+import { RemindersCenterModal } from '../reminders/RemindersCenterModal';
+import { calculateActiveReminders } from '../../lib/remindersEngine';
 import { 
   HeartPulse, 
   Globe, 
   Type, 
   Sun, 
   UserCheck, 
-  Briefcase,
-  ChevronDown,
-  X,
-  LogOut,
-  ShieldCheck,
-  Mail,
-  Phone,
-  Sparkles,
-  LogIn
+  Briefcase, 
+  ChevronDown, 
+  X, 
+  LogOut, 
+  ShieldCheck, 
+  Mail, 
+  Phone, 
+  Sparkles, 
+  LogIn,
+  Home,
+  UserPlus,
+  Bell,
+  ShieldAlert
 } from 'lucide-react';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  activeTab?: string;
+  onNavigateTab?: (tab: any) => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ activeTab, onNavigateTab }) => {
   const firebaseUser = useAppStore(s => s.firebaseUser);
   const setFirebaseUser = useAppStore(s => s.setFirebaseUser);
   const setShowAuthModal = useAppStore(s => s.setShowAuthModal);
   const showToast = useAppStore(s => s.showToast);
 
   const userProfile = useAppStore(s => s.userProfile);
+  const medications = useAppStore(s => s.medications);
+  const medicationLogs = useAppStore(s => s.medicationLogs);
+  const appointments = useAppStore(s => s.appointments);
+  const carePlan = useAppStore(s => s.carePlan);
   const language = useAppStore(s => s.language);
   const setLanguage = useAppStore(s => s.setLanguage);
   const fontSize = useAppStore(s => s.fontSize);
@@ -38,8 +53,19 @@ export const Header: React.FC = () => {
 
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showRemindersModal, setShowRemindersModal] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showAccessMenu, setShowAccessMenu] = useState(false);
+
+  const allReminders = calculateActiveReminders(
+    medications,
+    medicationLogs,
+    appointments,
+    carePlan?.tasks || []
+  );
+  const dueRemindersCount = allReminders.filter(
+    r => (r.dueStatus === 'due_now' || r.dueStatus === 'overdue') && !r.isCompleted
+  ).length;
 
   const t = getTranslation(language);
 
@@ -80,8 +106,12 @@ export const Header: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
         
         {/* Logo & Tag */}
-        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-teal-500/20 text-white shrink-0">
+        <div 
+          onClick={() => onNavigateTab?.(firebaseUser ? 'dashboard' : 'landing')}
+          className="flex items-center gap-2.5 sm:gap-3 shrink-0 cursor-pointer group"
+          title="Return to Home"
+        >
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-teal-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-teal-500/20 text-white shrink-0 group-hover:scale-105 transition-transform">
             <HeartPulse className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
           </div>
           <div>
@@ -103,6 +133,42 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* PWA Install Button */}
           <PWAInstallButton compact />
+
+          {/* Health Reminders Bell Button with Live Badge */}
+          <button
+            onClick={() => {
+              setShowRemindersModal(true);
+              setShowLangMenu(false);
+              setShowAccessMenu(false);
+              setShowAccountModal(false);
+            }}
+            className="relative flex items-center justify-center p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-slate-200 transition active:scale-95"
+            title={`Health Reminders (${dueRemindersCount} active)`}
+          >
+            <Bell className={`w-3.5 h-3.5 ${dueRemindersCount > 0 ? 'text-amber-400 animate-bounce' : 'text-teal-400'}`} />
+            {dueRemindersCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-md animate-pulse">
+                {dueRemindersCount}
+              </span>
+            )}
+          </button>
+
+          {/* Admin RBAC Governance Shortcut */}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setShowAdminModal(true);
+                setShowLangMenu(false);
+                setShowAccessMenu(false);
+                setShowAccountModal(false);
+              }}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold transition active:scale-95"
+              title="Admin User Management & Staff Governance"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Admin</span>
+            </button>
+          )}
 
           {/* Language Selector (EN, Shona, Ndebele) */}
           <div className="relative">
@@ -301,19 +367,56 @@ export const Header: React.FC = () => {
               )}
             </div>
           ) : (
-            /* Not logged in: Prominent Sign In button */
-            <button
-              onClick={() => {
-                setShowAuthModal(true);
-                setShowLangMenu(false);
-                setShowAccessMenu(false);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs shadow-md shadow-teal-500/20 active:scale-95 transition"
-              title="Sign in with Google, Email, or Phone"
-            >
-              <LogIn className="w-3.5 h-3.5 text-slate-950" />
-              <span>Sign In</span>
-            </button>
+            /* Not logged in: Prominent Action Buttons */
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {activeTab === 'landing' ? (
+                <>
+                  <button
+                    onClick={() => onNavigateTab?.('dashboard')}
+                    className="hidden xs:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-teal-950/70 hover:bg-teal-900 border border-teal-500/40 text-teal-200 text-xs font-semibold transition active:scale-95"
+                    title="Explore Interactive App as Guest"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Demo Mode</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowAuthModal(true, 'register');
+                      setShowLangMenu(false);
+                      setShowAccessMenu(false);
+                    }}
+                    className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition active:scale-95"
+                    title="Register New Account"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-teal-300" />
+                    <span>Register</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => onNavigateTab?.('landing')}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold transition active:scale-95"
+                  title="Return to Landing Page & Overview"
+                >
+                  <Home className="w-3.5 h-3.5 text-teal-300" />
+                  <span className="hidden sm:inline">Overview &amp; Features</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  setShowAuthModal(true, 'signin');
+                  setShowLangMenu(false);
+                  setShowAccessMenu(false);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs shadow-md shadow-teal-500/20 active:scale-95 transition"
+                title="Sign in with Google, Email, or Phone"
+              >
+                <LogIn className="w-3.5 h-3.5 text-slate-950" />
+                <span>Sign In</span>
+              </button>
+            </div>
           )}
 
           {/* Text Size & Contrast Display Settings */}
@@ -406,6 +509,13 @@ export const Header: React.FC = () => {
       <AdminUserManagementModal 
         isOpen={showAdminModal} 
         onClose={() => setShowAdminModal(false)} 
+      />
+
+      {/* Global Health & Clinical Reminders Center */}
+      <RemindersCenterModal
+        isOpen={showRemindersModal}
+        onClose={() => setShowRemindersModal(false)}
+        onNavigateTab={onNavigateTab}
       />
     </header>
   );

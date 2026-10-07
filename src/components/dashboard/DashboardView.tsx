@@ -3,6 +3,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { getTranslation } from '../../lib/translations';
 import { TabKey } from '../layout/BottomNav';
 import { generateWhatsAppLink } from '../../lib/whatsappGateway';
+import { RemindersDashboardBanner } from '../reminders/RemindersDashboardBanner';
+import { RemindersCenterModal } from '../reminders/RemindersCenterModal';
 import { 
   Heart, 
   Pill, 
@@ -21,7 +23,8 @@ import {
   X,
   CalendarCheck,
   CheckCircle2,
-  ListTodo
+  ListTodo,
+  Bell
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -46,6 +49,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateTab, onO
   const chronicConditions = useAppStore(s => s.chronicConditions);
 
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [showRemindersModal, setShowRemindersModal] = useState(false);
 
   const t = getTranslation(language);
 
@@ -99,17 +103,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateTab, onO
             </h1>
           </div>
 
-          {/* Emergency SOS Trigger */}
-          <button
-            onClick={() => setShowEmergencyModal(true)}
-            className="self-start sm:self-center shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-lg shadow-rose-600/30 active:scale-95 transition"
-            title="Open Emergency Contacts"
-          >
-            <PhoneCall className="w-4 h-4 animate-pulse" />
-            <span>SOS Emergency</span>
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+            {/* Health Reminders Quick Trigger */}
+            <button
+              onClick={() => setShowRemindersModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-200 text-xs font-bold active:scale-95 transition"
+              title="Open Reminders Center"
+            >
+              <Bell className="w-3.5 h-3.5 text-teal-300" />
+              <span>Reminders</span>
+            </button>
+
+            {/* Emergency SOS Trigger */}
+            <button
+              onClick={() => setShowEmergencyModal(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-lg shadow-rose-600/30 active:scale-95 transition"
+              title="Open Emergency Contacts"
+            >
+              <PhoneCall className="w-4 h-4 animate-pulse" />
+              <span>SOS Emergency</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Interactive Reminders Banner (Medication Administer, Exercise, Care Tasks & Appointments) */}
+      <RemindersDashboardBanner 
+        onOpenRemindersModal={() => setShowRemindersModal(true)}
+        onNavigateTab={onNavigateTab}
+      />
 
       {/* Key Healthcare Metrics: Scheduled Appointments, Successful Appointments & HomeCare Tasks */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -531,6 +553,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigateTab, onO
           </div>
         </div>
       )}
+
+      {/* Health & Clinical Reminders Center Modal */}
+      <RemindersCenterModal
+        isOpen={showRemindersModal}
+        onClose={() => setShowRemindersModal(false)}
+        onNavigateTab={onNavigateTab}
+      />
 
     </div>
   );

@@ -43,7 +43,12 @@ import {
   getClinicalStarterTemplate
 } from '../data/mockSeedData';
 import { createAuditEntry } from '../lib/security';
-import { triggerWhatsAppNotification, WhatsAppNotificationRecord } from '../lib/whatsappGateway';
+import { 
+  triggerWhatsAppNotification, 
+  WhatsAppNotificationRecord, 
+  buildReminderWhatsAppMessage 
+} from '../lib/whatsappGateway';
+import type { HealthReminder, ReminderType } from '../lib/remindersEngine';
 import { 
   persistItemToFirestore, 
   deleteItemFromFirestore, 
@@ -60,6 +65,7 @@ interface AppState {
   currentUserRole: UserRole;
   firebaseUser: FirebaseUserRecord | null;
   showAuthModal: boolean;
+  authModalMode: 'signin' | 'register';
   adminUsersList: FirebaseUserRecord[];
   userProfile: UserProfile;
   emergencyContacts: EmergencyContact[];
@@ -101,13 +107,31 @@ interface AppState {
   isSyncing: boolean;
   lastSyncedAt: string;
   whatsappNotifications: WhatsAppNotificationRecord[];
+
+  // Auto WhatsApp Trigger Engine
+  autoWhatsAppTriggerEnabled: boolean;
+  autoWhatsAppNumber: string;
+  firedWhatsAppReminderKeys: string[];
+  lastAutoFiredWhatsApp: {
+    id: string;
+    reminderTitle: string;
+    phone: string;
+    deepLinkUrl: string;
+    message: string;
+    timestamp: string;
+    type: string;
+  } | null;
+  setAutoWhatsAppTriggerEnabled: (enabled: boolean) => void;
+  setAutoWhatsAppNumber: (phone: string) => void;
+  dismissLastAutoFiredWhatsApp: () => void;
+  fireAutoWhatsAppReminder: (reminder: HealthReminder, forceOpen?: boolean) => WhatsAppNotificationRecord;
   
   // Toast notifications for user feedback
   activeToast: { id: string; message: string; type: 'success' | 'info' | 'warning' | 'error' } | null;
 
   // Actions
   setFirebaseUser: (user: FirebaseUserRecord | null) => void;
-  setShowAuthModal: (show: boolean) => void;
+  setShowAuthModal: (show: boolean, mode?: 'signin' | 'register') => void;
   setAdminUsersList: (users: FirebaseUserRecord[]) => void;
   setRole: (role: UserRole) => void;
   setLanguage: (lang: Language) => void;
@@ -216,6 +240,9 @@ function persistState(state: Partial<AppState>) {
       lastSyncedAt: state.lastSyncedAt,
       auditLogs: state.auditLogs,
       whatsappNotifications: state.whatsappNotifications,
+      autoWhatsAppTriggerEnabled: state.autoWhatsAppTriggerEnabled,
+      autoWhatsAppNumber: state.autoWhatsAppNumber,
+      firedWhatsAppReminderKeys: state.firedWhatsAppReminderKeys,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(subset));
   } catch (err) {
@@ -230,8 +257,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentUserRole: (persisted as any).firebaseUser?.role || persisted.currentUserRole || 'patient',
   firebaseUser: (persisted as any).firebaseUser || null,
   showAuthModal: false,
+  authModalMode: 'signin',
   adminUsersList: [],
-  setShowAuthModal: (show: boolean) => set({ showAuthModal: show }),
+  setShowAuthModal: (show: boolean, mode: 'signin' | 'register' = 'signin') => set({ showAuthModal: show, authModalMode: mode }),
   setAdminUsersList: (users: FirebaseUserRecord[]) => set({ adminUsersList: users }),
   setFirebaseUser: (user: FirebaseUserRecord | null) => {
     set((s) => {
@@ -309,6 +337,90 @@ export const useAppStore = create<AppState>((set, get) => ({
   isSyncing: false,
   lastSyncedAt: persisted.lastSyncedAt || new Date().toISOString(),
   whatsappNotifications: (persisted as any).whatsappNotifications || [],
+
+  // Auto WhatsApp Trigger Engine Initial State
+  autoWhatsAppTriggerEnabled: (persisted as any).autoWhatsAppTriggerEnabled !== undefined 
+    ? (persisted as any).autoWhatsAppTriggerEnabled 
+    : true,
+  autoWhatsAppNumber: (persisted as any).autoWhatsAppNumber || (persisted as any).userProfile?.phoneNumber || '+263772824132',
+  firedWhatsAppReminderKeys: (persisted as any).firedWhatsAppReminderKeys || [],
+  lastAutoFiredWhatsApp: null,
+
+  setAutoWhatsAppTriggerEnabled: (enabled: boolean) => {
+    set((s) => {
+      const next = { autoWhatsAppTriggerEnabled: enabled };
+      persistState({ ...s, ...next });
+      return next;
+    });
+    get().showToast(
+      enabled ? 'Auto WhatsApp reminder triggers enabled' : 'Auto WhatsApp reminder triggers paused',
+      'info'
+    );
+  },
+
+  setAutoWhatsAppNumber: (phone: string) => {
+    set((s) => {
+      const next = { 
+        autoWhatsAppNumber: phone,
+        userProfile: { ...s.userProfile, phoneNumber: phone }
+      };
+      persistState({ ...s, ...next });
+      return next;
+    });
+    get().showToast(`WhatsApp reminder phone set to ${phone}`, 'success');
+  },
+
+  dismissLastAutoFiredWhatsApp: () => set({ lastAutoFiredWhatsApp: null }),
+
+  fireAutoWhatsAppReminder: (reminder: HealthReminder, forceOpen: boolean = false) => {
+    const s = get();
+    const phone = s.autoWhatsAppNumber || s.userProfile.phoneNumber || '+263772824132';
+    const patientName = s.userProfile.fullName || s.firebaseUser?.fullName || 'Patient';
+    const message = buildReminderWhatsAppMessage(reminder, patientName);
+
+    const typeMap: Record<ReminderType, WhatsAppNotificationRecord['type']> = {
+      medication: 'MEDICATION',
+      exercise: 'EXERCISE',
+      appointment: 'APPOINTMENT',
+      task: 'CARE_TASK'
+    };
+    const recordType = typeMap[reminder.type] || 'MEDICATION';
+
+    const record = triggerWhatsAppNotification(
+      phone,
+      message,
+      recordType,
+      forceOpen,
+      true,
+      reminder.title
+    );
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const triggerKey = `${reminder.id}_${todayStr}_${reminder.time}`;
+
+    set((state) => {
+      const updatedNotifications = [record, ...state.whatsappNotifications];
+      const updatedKeys = [triggerKey, ...state.firedWhatsAppReminderKeys.slice(0, 100)];
+      const lastAutoFired = {
+        id: record.id,
+        reminderTitle: reminder.title,
+        phone,
+        deepLinkUrl: record.deepLinkUrl,
+        message,
+        timestamp: record.sentAt,
+        type: reminder.type
+      };
+      const next = {
+        whatsappNotifications: updatedNotifications,
+        firedWhatsAppReminderKeys: updatedKeys,
+        lastAutoFiredWhatsApp: lastAutoFired
+      };
+      persistState({ ...state, ...next });
+      return next;
+    });
+
+    return record;
+  },
 
   activeToast: null,
 

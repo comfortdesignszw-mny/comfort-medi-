@@ -28,14 +28,25 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with specific database ID and robust connection settings
-export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-}, (firebaseConfig as any).firestoreDatabaseId);
+// Initialize Firestore with specific database ID from config as mandated by Firebase skill
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 
 // Initialize Auth
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Safe, non-blocking connection check
+if (typeof window !== 'undefined') {
+  setTimeout(async () => {
+    try {
+      await getDocFromServer(doc(db, 'test', 'connection'));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('the client is offline')) {
+        console.warn('Firestore offline cache active.');
+      }
+    }
+  }, 1000);
+}
 
 export enum OperationType {
   CREATE = 'create',

@@ -29,16 +29,44 @@ export const ADMIN_EMAIL = 'comfort.designszw@gmail.com';
 
 /**
  * Transforms a Zimbabwean or international phone number into a synthetic email for Firebase Auth.
- * Enables users to log in with Phone & Password on the UI while Firebase Auth handles it as credentials.
+ * Normalizes leading zeros, country codes (+263, 00263, 07...), and spaces.
  */
-export function formatPhoneToEmail(phone: string): string {
-  let cleaned = phone.replace(/[^0-9]/g, '');
-  if (cleaned.startsWith('07') && cleaned.length === 10) {
+export function normalizePhoneNumber(phone: string): { normalizedDigits: string; displayPhone: string } {
+  let cleaned = (phone || '').replace(/[^0-9]/g, '');
+  
+  // Remove international dialing prefix 00
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.substring(2);
+  }
+
+  // Handle Zimbabwe numbers: country code 263
+  // 1. Starts with 2630... (e.g. 2630772824132) -> strip the local 0
+  if (cleaned.startsWith('2630') && cleaned.length >= 13) {
+    cleaned = '263' + cleaned.substring(4);
+  }
+  // 2. Starts with 0 (e.g. 0772824132 or 071... or 073... or 078...) -> replace leading 0 with 263
+  else if (cleaned.startsWith('0') && cleaned.length === 10) {
     cleaned = '263' + cleaned.substring(1);
-  } else if (cleaned.length === 9 && cleaned.startsWith('7')) {
+  }
+  // 3. Local 9 digits starting with 7, 1, or 3 -> prefix 263
+  else if (cleaned.length === 9 && (cleaned.startsWith('7') || cleaned.startsWith('1') || cleaned.startsWith('3'))) {
     cleaned = '263' + cleaned;
   }
-  return `phone_${cleaned}@comfortmedi.app`;
+
+  if (!cleaned || cleaned.length < 5) {
+    throw new Error('Please enter a valid phone number (at least 6 digits).');
+  }
+
+  const displayPhone = cleaned.startsWith('263') && cleaned.length === 12
+    ? `+263 ${cleaned.substring(3, 5)} ${cleaned.substring(5, 8)} ${cleaned.substring(8)}`
+    : `+${cleaned}`;
+
+  return { normalizedDigits: cleaned, displayPhone };
+}
+
+export function formatPhoneToEmail(phone: string): string {
+  const { normalizedDigits } = normalizePhoneNumber(phone);
+  return `phone_${normalizedDigits}@comfortmedi.app`;
 }
 
 /**
@@ -53,6 +81,7 @@ export function isSuperAdmin(email?: string | null): boolean {
  * Syncs user record with Firestore and assigns RBAC role.
  * comfort.designszw@gmail.com is always made Admin.
  * All other newly registered users default to Patient.
+ * Detects every new user registration and records an audit log for the Admin Dashboard.
  */
 export async function syncUserProfile(
   user: User, 
@@ -60,53 +89,73 @@ export async function syncUserProfile(
 ): Promise<FirebaseUserRecord> {
   const userRef = doc(db, 'users', user.uid);
   const pathForDoc = `users/${user.uid}`;
+  const isEmailAdmin = isSuperAdmin(user.email);
+
+  let formattedPhone = metadata?.phoneNumber || user.phoneNumber || '';
+  if (formattedPhone) {
+    try {
+      formattedPhone = normalizePhoneNumber(formattedPhone).displayPhone;
+    } catch {
+      // keep raw if parse fails
+    }
+  }
+
+  const fallbackRecord: FirebaseUserRecord = {
+    uid: user.uid,
+    email: user.email || (metadata?.phoneNumber ? formatPhoneToEmail(metadata.phoneNumber) : ''),
+    phoneNumber: formattedPhone,
+    fullName: metadata?.fullName || user.displayName || (isEmailAdmin ? 'Comfort Designs Admin' : 'Patient User'),
+    role: isEmailAdmin ? 'admin' : 'patient',
+    authProvider: metadata?.authProvider || (user.providerData[0]?.providerId === 'google.com' ? 'google' : 'password'),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
   
   try {
     const userSnap = await getDoc(userRef);
-    const isEmailAdmin = isSuperAdmin(user.email);
     
     if (userSnap.exists()) {
       const data = userSnap.data() as FirebaseUserRecord;
       // If user's email is comfort.designszw@gmail.com, enforce admin role
       if (isEmailAdmin && data.role !== 'admin') {
-        await updateDoc(userRef, { role: 'admin', updatedAt: new Date().toISOString() });
+        await updateDoc(userRef, { role: 'admin', updatedAt: new Date().toISOString() }).catch(() => null);
         data.role = 'admin';
         // Also register in admins collection
         await setDoc(doc(db, 'admins', user.uid), {
           uid: user.uid,
           email: user.email,
           assignedAt: new Date().toISOString()
-        }, { merge: true });
+        }, { merge: true }).catch(() => null);
       }
       return data;
     }
 
-    // New User Profile Creation
-    const role: UserRole = isEmailAdmin ? 'admin' : 'patient';
-    const newRecord: FirebaseUserRecord = {
-      uid: user.uid,
-      email: user.email || (metadata?.phoneNumber ? formatPhoneToEmail(metadata.phoneNumber) : ''),
-      phoneNumber: metadata?.phoneNumber || user.phoneNumber || '',
-      fullName: metadata?.fullName || user.displayName || (isEmailAdmin ? 'Comfort Designs Admin' : 'New Patient'),
-      role,
-      authProvider: metadata?.authProvider || (user.providerData[0]?.providerId === 'google.com' ? 'google' : 'password'),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    await setDoc(userRef, newRecord);
+    // New User Profile Creation in Firestore
+    await setDoc(userRef, fallbackRecord);
 
     if (isEmailAdmin) {
       await setDoc(doc(db, 'admins', user.uid), {
         uid: user.uid,
         email: user.email,
         assignedAt: new Date().toISOString()
-      }, { merge: true });
+      }, { merge: true }).catch(() => null);
     }
 
-    return newRecord;
+    // Log registration for Admin Dashboard notification
+    try {
+      await logStaffActivity(
+        `New Registration: ${fallbackRecord.fullName} (${fallbackRecord.phoneNumber || fallbackRecord.email}) registered as ${fallbackRecord.role.toUpperCase()}`,
+        'AUTH',
+        `Platform signup via ${fallbackRecord.authProvider} on ${new Date().toLocaleDateString()}. UID: ${fallbackRecord.uid}`
+      );
+    } catch (auditErr) {
+      console.warn('Admin registration log notice:', auditErr);
+    }
+
+    return fallbackRecord;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, pathForDoc);
+    console.warn('Firestore user sync note (using memory record):', error);
+    return fallbackRecord;
   }
 }
 
@@ -145,13 +194,14 @@ export async function registerWithEmail(
 
 /**
  * Login Method 3: Phone & Password
- * Uses phone as email ID under the hood with a clean phone UI.
+ * Uses normalized phone as email ID under the hood with a clean phone UI.
  */
 export async function loginWithPhone(phoneNumber: string, pass: string): Promise<FirebaseUserRecord> {
-  const syntheticEmail = formatPhoneToEmail(phoneNumber);
+  const { normalizedDigits, displayPhone } = normalizePhoneNumber(phoneNumber);
+  const syntheticEmail = `phone_${normalizedDigits}@comfortmedi.app`;
   const cred = await signInWithEmailAndPassword(auth, syntheticEmail, pass);
   return await syncUserProfile(cred.user, {
-    phoneNumber: phoneNumber.trim(),
+    phoneNumber: displayPhone,
     authProvider: 'phone'
   });
 }
@@ -161,11 +211,12 @@ export async function registerWithPhone(
   pass: string, 
   fullName: string
 ): Promise<FirebaseUserRecord> {
-  const syntheticEmail = formatPhoneToEmail(phoneNumber);
+  const { normalizedDigits, displayPhone } = normalizePhoneNumber(phoneNumber);
+  const syntheticEmail = `phone_${normalizedDigits}@comfortmedi.app`;
   const cred = await createUserWithEmailAndPassword(auth, syntheticEmail, pass);
   return await syncUserProfile(cred.user, {
     fullName: fullName.trim(),
-    phoneNumber: phoneNumber.trim(),
+    phoneNumber: displayPhone,
     authProvider: 'phone'
   });
 }

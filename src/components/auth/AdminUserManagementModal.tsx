@@ -31,7 +31,9 @@ import {
   CheckCircle2, 
   Clock, 
   ShieldCheck,
-  Trash2
+  Trash2,
+  Bell,
+  Sparkles
 } from 'lucide-react';
 
 interface AdminUserManagementModalProps {
@@ -55,6 +57,7 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [userToDelete, setUserToDelete] = useState<FirebaseUserRecord | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [auditCategoryFilter, setAuditCategoryFilter] = useState<'ALL' | 'AUTH' | 'CLINICAL' | 'SECURITY'>('ALL');
 
   // New assignment form state
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
@@ -172,6 +175,16 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
   const doctorsList = users.filter(u => u.role === 'doctor' || u.role === 'caregiver');
   const patientsList = users.filter(u => u.role === 'patient');
 
+  // Detect recent user signups or patients pending clinical assignment
+  const newRegistrations = users.filter(u => {
+    const isSuperAdminEmail = u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+    if (isSuperAdminEmail) return false;
+    const createdAtMs = u.createdAt ? new Date(u.createdAt).getTime() : 0;
+    const isRecent = (Date.now() - createdAtMs) < 7 * 24 * 60 * 60 * 1000;
+    const hasAssignment = assignments.some(a => a.patientId === u.uid && a.status === 'active');
+    return isRecent || (u.role === 'patient' && !hasAssignment);
+  });
+
   const filteredUsers = users.filter(u => {
     const q = searchQuery.toLowerCase();
     return (
@@ -260,6 +273,53 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
           {/* TAB 1: USER ROLES */}
           {activeTab === 'roles' && (
             <div className="space-y-3">
+
+              {/* Registration Detection Alert Card for Administrator */}
+              {newRegistrations.length > 0 && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-teal-50/50 to-emerald-50 border border-amber-300 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                        <Bell className="w-4 h-4 animate-bounce" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">
+                          Registration Detection: {newRegistrations.length} Users Pending Oversight
+                        </h4>
+                        <p className="text-[11px] text-amber-900/80">
+                          The system detected new patient signups. Review credentials, assign attending doctors, or upgrade RBAC roles.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 shrink-0">
+                      Live Alerts
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {newRegistrations.slice(0, 4).map(nr => (
+                      <div key={nr.uid} className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs flex items-center justify-between gap-2 shadow-xs">
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">{nr.fullName}</p>
+                          <p className="text-[10px] text-slate-500 truncate">
+                            {nr.phoneNumber || nr.email || 'Phone ID User'} • Auth: {nr.authProvider || 'phone'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedPatientId(nr.uid);
+                            setActiveTab('assignments');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[10px] whitespace-nowrap transition active:scale-95 shrink-0"
+                        >
+                          Assign Doctor
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -486,51 +546,106 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
             </div>
           )}
 
-          {/* TAB 3: STAFF MONITORING AUDIT */}
+          {/* TAB 3: STAFF MONITORING & REGISTRATION AUDIT */}
           {activeTab === 'audit' && (
             <div className="space-y-3">
-              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <strong>Clinical Governance:</strong> Monitoring medical staff activity, patient chart updates, and clinical actions across the database.
+                  <strong>Staff &amp; Registration Governance:</strong> Real-time monitoring of user sign-ups, clinical staff updates, and administrative events across Cloud Firestore.
                 </div>
                 <button
                   onClick={loadAllData}
-                  className="px-3 py-1 rounded-xl bg-amber-600 text-white font-bold text-[11px] hover:bg-amber-700 transition"
+                  className="self-start sm:self-center px-3 py-1 rounded-xl bg-amber-600 text-white font-bold text-[11px] hover:bg-amber-700 transition shrink-0"
                 >
                   Refresh Logs
                 </button>
               </div>
 
+              {/* Audit Filter Tabs */}
+              <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold overflow-x-auto">
+                <button
+                  onClick={() => setAuditCategoryFilter('ALL')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    auditCategoryFilter === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  All Logs ({auditLogs.length})
+                </button>
+                <button
+                  onClick={() => setAuditCategoryFilter('AUTH')}
+                  className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
+                    auditCategoryFilter === 'AUTH' ? 'bg-white text-teal-800 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <span>User Registrations ({auditLogs.filter(l => l.category === 'AUTH').length})</span>
+                </button>
+                <button
+                  onClick={() => setAuditCategoryFilter('CLINICAL')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    auditCategoryFilter === 'CLINICAL' ? 'bg-white text-blue-800 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Clinical Actions ({auditLogs.filter(l => l.category === 'CLINICAL').length})
+                </button>
+                <button
+                  onClick={() => setAuditCategoryFilter('SECURITY')}
+                  className={`px-3 py-1 rounded-lg transition ${
+                    auditCategoryFilter === 'SECURITY' ? 'bg-white text-rose-800 shadow-sm font-bold' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Security &amp; Roles ({auditLogs.filter(l => l.category === 'SECURITY').length})
+                </button>
+              </div>
+
               {auditLogs.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  No staff actions recorded yet.
+                  No staff or registration actions recorded yet.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {auditLogs.map(log => (
-                    <div 
-                      key={log.id}
-                      className="p-3 rounded-2xl border border-slate-200 bg-white flex items-start justify-between gap-3 text-xs"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{log.action}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-slate-100 text-slate-700">
-                            {log.category}
+                  {auditLogs
+                    .filter(l => auditCategoryFilter === 'ALL' || l.category === auditCategoryFilter)
+                    .map(log => {
+                      const isAuthEvent = log.category === 'AUTH';
+                      return (
+                        <div 
+                          key={log.id}
+                          className={`p-3 rounded-2xl border transition flex items-start justify-between gap-3 text-xs ${
+                            isAuthEvent 
+                              ? 'bg-teal-50/60 border-teal-200' 
+                              : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-bold ${isAuthEvent ? 'text-teal-950 font-black' : 'text-slate-900'}`}>
+                                {log.action}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                                isAuthEvent
+                                  ? 'bg-teal-200 text-teal-900'
+                                  : log.category === 'SECURITY'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : log.category === 'CLINICAL'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {log.category}
+                              </span>
+                            </div>
+                            {log.details && (
+                              <p className="text-[11px] text-slate-600">{log.details}</p>
+                            )}
+                            <p className="text-[10px] text-slate-400">
+                              Actor: <strong>{log.actorName || log.actorId}</strong>
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        {log.details && (
-                          <p className="text-[11px] text-slate-600">{log.details}</p>
-                        )}
-                        <p className="text-[10px] text-slate-400">
-                          Actor: <strong>{log.actorName || log.actorId}</strong>
-                        </p>
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               )}
             </div>
