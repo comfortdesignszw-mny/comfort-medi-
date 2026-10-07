@@ -53,7 +53,7 @@ service cloud.firestore {
         resource.data.doctorId == request.auth.uid ||
         resource.data.patientId == request.auth.uid
       );
-      allow list: if isSignedIn();
+      allow list: if isSystemAdmin() || (isSignedIn() && resource.data.doctorId == request.auth.uid);
       allow write: if isSystemAdmin() && isValidId(assignmentId);
     }
 
@@ -68,7 +68,8 @@ service cloud.firestore {
     match /users/{userId} {
       // Patients read own profile; assigned doctors and admins can read
       allow get: if (isOwner(userId) || isSystemAdmin() || isAssignedDoctor(userId)) && isValidId(userId);
-      allow list: if isSystemAdmin() || isSignedIn();
+      // Strictly Admin only: regular users cannot list all users
+      allow list: if isSystemAdmin();
 
       // Creation: comfort.designszw@gmail.com can be admin or patient; others default to patient
       allow create: if isSignedIn() && isOwner(userId) && isValidId(userId) &&
@@ -79,7 +80,9 @@ service cloud.firestore {
           (request.resource.data.role == 'patient')
         );
 
-      // Updates: Admin can update any field (including role); Owner can update profile fields but not role/uid
+      // Updates:
+      // - Admin has total privilege for user management (promote, demote, modify user roles)
+      // - Regular user can ONLY update their own personal profile fields, never their role or other users' data
       allow update: if isSignedIn() && isValidId(userId) && isValidUser(request.resource.data) && (
         isSystemAdmin() ||
         (
@@ -93,7 +96,7 @@ service cloud.firestore {
         )
       );
 
-      // Deletion (Right to be Forgotten): Owner or Admin can delete profile
+      // Deletion: Admin has privilege for user management (delete users); Owner can delete own account
       allow delete: if (isOwner(userId) || isSystemAdmin()) && isValidId(userId);
 
       // Scalable Subcollections per patient: vitals, medications, appointments, records, tasks, progressReports

@@ -7,7 +7,9 @@ import {
   assignPatientToDoctor,
   revokePatientAssignment,
   fetchAllAssignments,
-  fetchStaffAuditLogs
+  fetchStaffAuditLogs,
+  deleteUserAccountAndData,
+  logStaffActivity
 } from '../../lib/authService';
 import { FirebaseUserRecord, UserRole, PatientAssignment, AuditLog } from '../../types';
 import { 
@@ -21,14 +23,15 @@ import {
   RefreshCw, 
   Search, 
   Mail, 
-  Phone,
-  AlertCircle,
-  UserPlus,
-  Activity,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  ShieldCheck
+  Phone, 
+  AlertCircle, 
+  UserPlus, 
+  Activity, 
+  Calendar, 
+  CheckCircle2, 
+  Clock, 
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
 
 interface AdminUserManagementModalProps {
@@ -50,6 +53,8 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
   const [updatingUid, setUpdatingUid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<FirebaseUserRecord | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   // New assignment form state
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
@@ -96,6 +101,28 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
       showToast(err?.message || 'Failed to update user role', 'error');
     } finally {
       setUpdatingUid(null);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    try {
+      await deleteUserAccountAndData(userToDelete.uid);
+      await logStaffActivity(
+        `Admin deleted user: ${userToDelete.fullName} (${userToDelete.email || userToDelete.phoneNumber || userToDelete.uid})`,
+        'SECURITY',
+        `User account and clinical data permanently removed by Administrator (${ADMIN_EMAIL})`
+      );
+      setUsers(prev => prev.filter(u => u.uid !== userToDelete.uid));
+      setAssignments(prev => prev.filter(a => a.patientId !== userToDelete.uid && a.doctorId !== userToDelete.uid));
+      showToast(`User ${userToDelete.fullName} deleted permanently`, 'success');
+      setUserToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete user:', err);
+      showToast(err?.message || 'Failed to delete user from database', 'error');
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -324,6 +351,18 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
                             </button>
                           );
                         })}
+
+                        {/* Admin Delete User Button (not allowed on super admin) */}
+                        {!isSuperAdminEmail && (
+                          <button
+                            type="button"
+                            onClick={() => setUserToDelete(u)}
+                            className="p-1.5 ml-1 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 transition"
+                            title="Delete User (Admin Privilege)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -511,6 +550,86 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
           </button>
         </div>
       </div>
+
+      {/* Admin Delete User Confirmation Dialog */}
+      {userToDelete && (
+        <div 
+          onClick={() => !isDeletingUser && setUserToDelete(null)}
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-rose-200 overflow-hidden p-6 space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">
+                  Delete User Account (Admin Privilege)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Permanent removal from Firestore database
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Name:</span>
+                <span className="font-bold text-slate-800">{userToDelete.fullName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Role:</span>
+                <span className="font-bold uppercase text-teal-700">{userToDelete.role}</span>
+              </div>
+              {userToDelete.email && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Email:</span>
+                  <span className="font-medium text-slate-700">{userToDelete.email}</span>
+                </div>
+              )}
+              {userToDelete.phoneNumber && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Phone:</span>
+                  <span className="font-medium text-slate-700">{userToDelete.phoneNumber}</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-rose-700 bg-rose-50 p-3 rounded-xl border border-rose-200 leading-relaxed">
+              ⚠️ <strong>Warning:</strong> This action will permanently delete this user's profile and all subcollection health records (vitals, medications, appointments, records) from Cloud Firestore. This action cannot be undone.
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={() => setUserToDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={handleDeleteUser}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+              >
+                {isDeletingUser ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <span>Permanently Delete User</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -261,11 +261,11 @@ export const Header: React.FC = () => {
                     {isAdmin && (
                       <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5">
                         <div className="flex items-center gap-1.5 text-xs font-bold">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Database Administrator</span>
+                          <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                          <span>System Administrator</span>
                         </div>
                         <p className="text-[11px] text-amber-800 leading-snug">
-                          You have authority to upgrade other users from Patient to Doctor, Caregiver, or Admin.
+                          User management, role authorization, and clinical oversight.
                         </p>
                         <button
                           onClick={() => {
@@ -275,7 +275,7 @@ export const Header: React.FC = () => {
                           className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
                         >
                           <Briefcase className="w-3.5 h-3.5" />
-                          <span>Manage User Roles (RBAC)</span>
+                          <span>User Management &amp; Roles</span>
                         </button>
                       </div>
                     )}

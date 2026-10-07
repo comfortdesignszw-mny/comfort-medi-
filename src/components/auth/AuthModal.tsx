@@ -18,7 +18,6 @@ import {
   AlertCircle, 
   CheckCircle2, 
   Loader2,
-  Sparkles,
   Scale
 } from 'lucide-react';
 import { LegalModal } from '../legal/LegalModal';
@@ -167,26 +166,20 @@ export const AuthModal: React.FC = () => {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-teal-400/30 flex items-center justify-center text-teal-300">
               <ShieldCheck className="w-5 h-5 text-teal-400" />
             </div>
             <div>
-              <span className="text-[10px] font-bold tracking-widest text-teal-300 uppercase">
-                Firebase Authentication &amp; RBAC
-              </span>
               <h2 className="text-lg sm:text-xl font-black text-white">
                 {authMode === 'signin' ? 'Sign In to Comfort Medi+' : 'Create Your Health Account'}
               </h2>
+              <p className="text-[11px] text-teal-200/90">
+                {authMode === 'signin' 
+                  ? 'Access your medical records and care plan' 
+                  : 'Register for personal health and adherence tracking'}
+              </p>
             </div>
-          </div>
-
-          {/* Admin Notice */}
-          <div className="mt-3 p-2 rounded-xl bg-white/10 border border-white/10 text-[11px] text-teal-100 flex items-start gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
-            <span>
-              <strong>Admin:</strong> <code className="text-amber-200 font-bold">{ADMIN_EMAIL}</code> is assigned full database administration privileges. All new registrations default to Patient role.
-            </span>
           </div>
 
           {/* Auth Mode Toggle (Sign In vs Register) */}
@@ -205,7 +198,7 @@ export const AuthModal: React.FC = () => {
                 authMode === 'register' ? 'bg-white text-[#0a2540] shadow' : 'text-slate-300 hover:text-white'
               }`}
             >
-              Register (New Patient)
+              Register
             </button>
           </div>
         </div>
@@ -233,7 +226,7 @@ export const AuthModal: React.FC = () => {
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
-              <span>Continue with Google One-Click SSO</span>
+              <span>Continue with Google</span>
             </button>
           </div>
 
