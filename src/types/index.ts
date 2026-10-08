@@ -1,5 +1,7 @@
 export type UserRole = 'patient' | 'caregiver' | 'doctor' | 'admin';
 
+export type SubscriptionTier = 'free' | 'pro' | 'family_pro';
+
 export interface FirebaseUserRecord {
   uid: string;
   email?: string;
@@ -9,6 +11,31 @@ export interface FirebaseUserRecord {
   authProvider: 'google' | 'password' | 'phone';
   createdAt?: string;
   updatedAt?: string;
+
+  // Age restriction & juvenile governance
+  dateOfBirth?: string;
+  age?: number;
+  ageVerified?: boolean;
+  isGuardianManaged?: boolean;
+  guardianName?: string;
+  guardianContact?: string;
+
+  // Unsubscribe & Notification controls
+  whatsappAlertsOptOut?: boolean;
+  emailAlertsOptOut?: boolean;
+  allNotificationsUnsubscribed?: boolean;
+  unsubscribeTimestamp?: string;
+
+  // Pro Subscription & Renewal
+  subscriptionTier?: SubscriptionTier;
+  subscriptionBillingCycle?: 'monthly' | 'yearly';
+  subscriptionRenewalTermsAccepted?: boolean;
+  subscriptionRenewalDate?: string;
+  autoRenew?: boolean;
+
+  // Compliance & Security flags
+  sessionReplayBlocked?: boolean;
+  dmcaDisclaimerAcknowledged?: boolean;
 }
 
 export type Language = 'en' | 'sn' | 'nd'; // English, Shona, Ndebele
@@ -43,6 +70,29 @@ export interface UserProfile {
   insuranceProvider: string;
   insurancePolicyNumber: string;
   primaryHealthcareProvider: string;
+
+  // Age Gate & Legal Status
+  ageVerified?: boolean;
+  isGuardianManaged?: boolean;
+  guardianName?: string;
+  guardianContact?: string;
+
+  // Unsubscribe & Communication Preferences
+  whatsappAlertsOptOut?: boolean;
+  emailAlertsOptOut?: boolean;
+  allNotificationsUnsubscribed?: boolean;
+  unsubscribeTimestamp?: string;
+
+  // Subscription & Auto-Renewal
+  subscriptionTier?: SubscriptionTier;
+  subscriptionBillingCycle?: 'monthly' | 'yearly';
+  subscriptionRenewalTermsAccepted?: boolean;
+  subscriptionRenewalDate?: string;
+  autoRenew?: boolean;
+
+  // Security & DMCA
+  sessionReplayBlocked?: boolean;
+  dmcaDisclaimerAcknowledged?: boolean;
 }
 
 export interface EmergencyContact {

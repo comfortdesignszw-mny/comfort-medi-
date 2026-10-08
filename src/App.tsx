@@ -8,6 +8,7 @@ import { NotificationToast } from './components/common/NotificationToast';
 import { AuthModal } from './components/auth/AuthModal';
 import { AssignedPatientsBanner } from './components/common/AssignedPatientsBanner';
 import { LegalModal } from './components/legal/LegalModal';
+import { RenewalTermsModal } from './components/subscription/RenewalTermsModal';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { syncUserProfile } from './lib/authService';
@@ -32,8 +33,10 @@ export default function App() {
   });
   const [openVitalsDirectly, setOpenVitalsDirectly] = useState(false);
   const [showLegalModal, setShowLegalModal] = useState(false);
-  const [legalModalTab, setLegalModalTab] = useState<'privacy' | 'terms' | 'rights'>('privacy');
+  const [legalModalTab, setLegalModalTab] = useState<'privacy' | 'terms' | 'rights' | 'dmca'>('privacy');
 
+  const showRenewalTermsModal = useAppStore(s => s.showRenewalTermsModal);
+  const setShowRenewalTermsModal = useAppStore(s => s.setShowRenewalTermsModal);
   const fontSize = useAppStore(s => s.fontSize);
   const highContrast = useAppStore(s => s.highContrast);
   const setFirebaseUser = useAppStore(s => s.setFirebaseUser);
@@ -239,6 +242,16 @@ export default function App() {
                 <span className="text-slate-300">•</span>
                 <button
                   onClick={() => {
+                    setLegalModalTab('dmca');
+                    setShowLegalModal(true);
+                  }}
+                  className="hover:text-teal-700 underline underline-offset-2 transition font-bold"
+                >
+                  DMCA Copyright Agent (Non-Liability)
+                </button>
+                <span className="text-slate-300">•</span>
+                <button
+                  onClick={() => {
                     setLegalModalTab('rights');
                     setShowLegalModal(true);
                   }}
@@ -280,6 +293,15 @@ export default function App() {
         onClose={() => setShowLegalModal(false)}
         defaultTab={legalModalTab}
       />
+
+      {/* Global Pro Subscription Renewal Terms Modal (activeTab !== 'profile') */}
+      {activeTab !== 'profile' && (
+        <RenewalTermsModal
+          isOpen={showRenewalTermsModal}
+          onClose={() => setShowRenewalTermsModal(false)}
+          selectedTier="pro"
+        />
+      )}
 
     </div>
   );

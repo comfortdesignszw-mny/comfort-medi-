@@ -69,6 +69,24 @@ export function formatPhoneToEmail(phone: string): string {
   return `phone_${normalizedDigits}@comfortmedi.app`;
 }
 
+export function calculateAge(dobString?: string): number {
+  if (!dobString) return 0;
+  const birthDate = new Date(dobString);
+  if (isNaN(birthDate.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : 0;
+}
+
+export function isStrictlyAboveAge(dobString?: string, minAgeLimit: number = 16): boolean {
+  const age = calculateAge(dobString);
+  return age > minAgeLimit; // strictly above 16 (i.e. 17+)
+}
+
 /**
  * Checks if a given email is the system super administrator.
  */
@@ -85,7 +103,20 @@ export function isSuperAdmin(email?: string | null): boolean {
  */
 export async function syncUserProfile(
   user: User, 
-  metadata?: { fullName?: string; phoneNumber?: string; authProvider?: 'google' | 'password' | 'phone' }
+  metadata?: { 
+    fullName?: string; 
+    phoneNumber?: string; 
+    authProvider?: 'google' | 'password' | 'phone';
+    dateOfBirth?: string;
+    ageVerified?: boolean;
+    isGuardianManaged?: boolean;
+    guardianName?: string;
+    guardianContact?: string;
+    whatsappAlertsOptOut?: boolean;
+    emailAlertsOptOut?: boolean;
+    subscriptionTier?: 'free' | 'pro' | 'family_pro';
+    dmcaDisclaimerAcknowledged?: boolean;
+  }
 ): Promise<FirebaseUserRecord> {
   const userRef = doc(db, 'users', user.uid);
   const pathForDoc = `users/${user.uid}`;
@@ -100,6 +131,8 @@ export async function syncUserProfile(
     }
   }
 
+  const computedAge = metadata?.dateOfBirth ? calculateAge(metadata.dateOfBirth) : undefined;
+
   const fallbackRecord: FirebaseUserRecord = {
     uid: user.uid,
     email: user.email || (metadata?.phoneNumber ? formatPhoneToEmail(metadata.phoneNumber) : ''),
@@ -108,7 +141,30 @@ export async function syncUserProfile(
     role: isEmailAdmin ? 'admin' : 'patient',
     authProvider: metadata?.authProvider || (user.providerData[0]?.providerId === 'google.com' ? 'google' : 'password'),
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+
+    // Age gate & Juvenile Governance
+    dateOfBirth: metadata?.dateOfBirth,
+    age: computedAge,
+    ageVerified: metadata?.ageVerified ?? (isEmailAdmin || (computedAge !== undefined && computedAge > 16)),
+    isGuardianManaged: metadata?.isGuardianManaged ?? false,
+    guardianName: metadata?.guardianName,
+    guardianContact: metadata?.guardianContact,
+
+    // Opt-out & Preferences
+    whatsappAlertsOptOut: metadata?.whatsappAlertsOptOut ?? false,
+    emailAlertsOptOut: metadata?.emailAlertsOptOut ?? false,
+    allNotificationsUnsubscribed: false,
+
+    // Subscriptions
+    subscriptionTier: metadata?.subscriptionTier ?? 'free',
+    subscriptionBillingCycle: 'monthly',
+    subscriptionRenewalTermsAccepted: false,
+    autoRenew: false,
+
+    // Security & DMCA
+    sessionReplayBlocked: true, // Strictly blocked by design
+    dmcaDisclaimerAcknowledged: metadata?.dmcaDisclaimerAcknowledged ?? true,
   };
   
   try {
@@ -144,9 +200,9 @@ export async function syncUserProfile(
     // Log registration for Admin Dashboard notification
     try {
       await logStaffActivity(
-        `New Registration: ${fallbackRecord.fullName} (${fallbackRecord.phoneNumber || fallbackRecord.email}) registered as ${fallbackRecord.role.toUpperCase()}`,
+        `New Registration: ${fallbackRecord.fullName} (${fallbackRecord.phoneNumber || fallbackRecord.email}) registered as ${fallbackRecord.role.toUpperCase()}${fallbackRecord.isGuardianManaged ? ' [Guardian Supervised]' : ''}`,
         'AUTH',
-        `Platform signup via ${fallbackRecord.authProvider} on ${new Date().toLocaleDateString()}. UID: ${fallbackRecord.uid}`
+        `Platform signup via ${fallbackRecord.authProvider} on ${new Date().toLocaleDateString()}. Age Verified: ${fallbackRecord.ageVerified ? 'Yes (>16)' : 'Guardian Managed'}. UID: ${fallbackRecord.uid}`
       );
     } catch (auditErr) {
       console.warn('Admin registration log notice:', auditErr);
@@ -166,7 +222,8 @@ export async function loginWithGoogle(): Promise<FirebaseUserRecord> {
   const cred = await signInWithPopup(auth, googleProvider);
   return await syncUserProfile(cred.user, {
     fullName: cred.user.displayName || undefined,
-    authProvider: 'google'
+    authProvider: 'google',
+    ageVerified: true,
   });
 }
 
@@ -182,13 +239,20 @@ export async function registerWithEmail(
   email: string, 
   pass: string, 
   fullName: string, 
-  phone?: string
+  phone?: string,
+  dateOfBirth?: string,
+  guardianInfo?: { isGuardianManaged: boolean; guardianName?: string; guardianContact?: string }
 ): Promise<FirebaseUserRecord> {
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
   return await syncUserProfile(cred.user, {
     fullName: fullName.trim(),
     phoneNumber: phone?.trim(),
-    authProvider: 'password'
+    authProvider: 'password',
+    dateOfBirth,
+    ageVerified: guardianInfo?.isGuardianManaged ? true : isStrictlyAboveAge(dateOfBirth),
+    isGuardianManaged: guardianInfo?.isGuardianManaged ?? false,
+    guardianName: guardianInfo?.guardianName,
+    guardianContact: guardianInfo?.guardianContact,
   });
 }
 
@@ -209,7 +273,9 @@ export async function loginWithPhone(phoneNumber: string, pass: string): Promise
 export async function registerWithPhone(
   phoneNumber: string, 
   pass: string, 
-  fullName: string
+  fullName: string,
+  dateOfBirth?: string,
+  guardianInfo?: { isGuardianManaged: boolean; guardianName?: string; guardianContact?: string }
 ): Promise<FirebaseUserRecord> {
   const { normalizedDigits, displayPhone } = normalizePhoneNumber(phoneNumber);
   const syntheticEmail = `phone_${normalizedDigits}@comfortmedi.app`;
@@ -217,7 +283,12 @@ export async function registerWithPhone(
   return await syncUserProfile(cred.user, {
     fullName: fullName.trim(),
     phoneNumber: displayPhone,
-    authProvider: 'phone'
+    authProvider: 'phone',
+    dateOfBirth,
+    ageVerified: guardianInfo?.isGuardianManaged ? true : isStrictlyAboveAge(dateOfBirth),
+    isGuardianManaged: guardianInfo?.isGuardianManaged ?? false,
+    guardianName: guardianInfo?.guardianName,
+    guardianContact: guardianInfo?.guardianContact,
   });
 }
 

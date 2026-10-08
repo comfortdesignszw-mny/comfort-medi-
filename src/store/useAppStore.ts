@@ -21,7 +21,8 @@ import {
   Language, 
   FontSize,
   FirebaseUserRecord,
-  PatientAssignment
+  PatientAssignment,
+  SubscriptionTier
 } from '../types';
 import { 
   INITIAL_USER_PROFILE, 
@@ -194,6 +195,20 @@ interface AppState {
   exportAllUserDataJSON: () => void;
   eraseAllUserDataAndReset: () => Promise<void>;
   loadClinicalStarterTemplate: () => void;
+
+  // Pro Subscription & Renewal Terms
+  showRenewalTermsModal: boolean;
+  setShowRenewalTermsModal: (show: boolean) => void;
+  showSubscriptionModal: boolean;
+  setShowSubscriptionModal: (show: boolean) => void;
+  updateSubscription: (tier: SubscriptionTier, cycle: 'monthly' | 'yearly', acceptTerms: boolean) => Promise<void>;
+  cancelSubscriptionAutoRenewal: () => Promise<void>;
+
+  // Notification Alerts Unsubscribe Controls
+  toggleWhatsAppOptOut: (optOut: boolean) => Promise<void>;
+  toggleEmailOptOut: (optOut: boolean) => Promise<void>;
+  unsubscribeAllAlerts: () => Promise<void>;
+  resubscribeAlerts: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'comfort_medi_plus_v3_clean';
@@ -374,6 +389,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   fireAutoWhatsAppReminder: (reminder: HealthReminder, forceOpen: boolean = false) => {
     const s = get();
+
+    // Check if user has unsubscribed or opted out of WhatsApp alerts
+    if (s.userProfile?.whatsappAlertsOptOut || s.userProfile?.allNotificationsUnsubscribed) {
+      return null as any;
+    }
+
     const phone = s.autoWhatsAppNumber || s.userProfile.phoneNumber || '+263772824132';
     const patientName = s.userProfile.fullName || s.firebaseUser?.fullName || 'Patient';
     const message = buildReminderWhatsAppMessage(reminder, patientName);
@@ -420,6 +441,131 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     return record;
+  },
+
+  // Pro Subscription State & Actions
+  showRenewalTermsModal: false,
+  setShowRenewalTermsModal: (show: boolean) => set({ showRenewalTermsModal: show }),
+  showSubscriptionModal: false,
+  setShowSubscriptionModal: (show: boolean) => set({ showSubscriptionModal: show }),
+
+  updateSubscription: async (tier: SubscriptionTier, cycle: 'monthly' | 'yearly', acceptTerms: boolean) => {
+    const renewalDate = new Date();
+    renewalDate.setMonth(renewalDate.getMonth() + (cycle === 'yearly' ? 12 : 1));
+    const renewalDateStr = renewalDate.toISOString().split('T')[0];
+
+    const updates: Partial<UserProfile> = {
+      subscriptionTier: tier,
+      subscriptionBillingCycle: cycle,
+      subscriptionRenewalTermsAccepted: acceptTerms,
+      subscriptionRenewalDate: renewalDateStr,
+      autoRenew: true
+    };
+
+    get().updateProfile(updates);
+    const targetUid = get().firebaseUser?.uid;
+    if (targetUid) {
+      await updateUserProfileInFirestore(targetUid, updates).catch(() => null);
+    }
+    const audit = createAuditEntry(`Subscription Updated to ${tier.toUpperCase()} (${cycle})`, 'AUTH', `Renewal date: ${renewalDateStr}`);
+    set((s) => ({
+      auditLogs: [audit, ...s.auditLogs],
+      showRenewalTermsModal: false,
+      showSubscriptionModal: false
+    }));
+    get().showToast(`Subscription activated: ${tier.toUpperCase()} plan`, 'success');
+  },
+
+  cancelSubscriptionAutoRenewal: async () => {
+    const updates: Partial<UserProfile> = {
+      autoRenew: false
+    };
+    get().updateProfile(updates);
+    const targetUid = get().firebaseUser?.uid;
+    if (targetUid) {
+      await updateUserProfileInFirestore(targetUid, updates).catch(() => null);
+    }
+    const audit = createAuditEntry('Subscription Auto-Renewal Cancelled', 'AUTH', 'User turned off automatic renewal');
+    set((s) => ({
+      auditLogs: [audit, ...s.auditLogs]
+    }));
+    get().showToast('Auto-renewal cancelled. Plan remains active until billing cycle end.', 'info');
+  },
+
+  // Unsubscribe & Notification Alerts Actions
+  toggleWhatsAppOptOut: async (optOut: boolean) => {
+    const updates: Partial<UserProfile> = {
+      whatsappAlertsOptOut: optOut
+    };
+    get().updateProfile(updates);
+    const targetUid = get().firebaseUser?.uid;
+    if (targetUid) {
+      await updateUserProfileInFirestore(targetUid, updates).catch(() => null);
+    }
+    const action = optOut ? 'Unsubscribed from WhatsApp alerts' : 'Resubscribed to WhatsApp alerts';
+    const audit = createAuditEntry(action, 'SECURITY');
+    set((s) => ({
+      auditLogs: [audit, ...s.auditLogs],
+      autoWhatsAppTriggerEnabled: !optOut && !s.userProfile.allNotificationsUnsubscribed
+    }));
+    get().showToast(optOut ? 'Unsubscribed: WhatsApp alert notifications silenced' : 'WhatsApp alert notifications enabled', optOut ? 'info' : 'success');
+  },
+
+  toggleEmailOptOut: async (optOut: boolean) => {
+    const updates: Partial<UserProfile> = {
+      emailAlertsOptOut: optOut
+    };
+    get().updateProfile(updates);
+    const targetUid = get().firebaseUser?.uid;
+    if (targetUid) {
+      await updateUserProfileInFirestore(targetUid, updates).catch(() => null);
+    }
+    const action = optOut ? 'Unsubscribed from email notifications' : 'Resubscribed to email notifications';
+    const audit = createAuditEntry(action, 'SECURITY');
+    set((s) => ({
+      auditLogs: [audit, ...s.auditLogs]
+    }));
+    get().showToast(optOut ? 'Unsubscribed from email alerts' : 'Email notifications enabled', optOut ? 'info' : 'success');
+  },
+
+  unsubscribeAllAlerts: async () => {
+    const timestamp = new Date().toISOString();
+    const updates: Partial<UserProfile> = {
+      whatsappAlertsOptOut: true,
+      emailAlertsOptOut: true,
+      allNotificationsUnsubscribed: true,
+      unsubscribeTimestamp: timestamp
+    };
+    get().updateProfile(updates);
+    const targetUid = get().firebaseUser?.uid;
+    if (targetUid) {
+      await updateUserProfileInFirestore(targetUid, updates).catch(() => null);
+    }
+    const audit = createAuditEntry('Unsubscribed from All Notifications & Direct Messages', 'SECURITY', `Opt-out timestamp: ${timestamp}`);
+    set((s) => ({
+      auditLogs: [audit, ...s.auditLogs],
+      autoWhatsAppTriggerEnabled: false
+    }));
+    get().showToast('Successfully unsubscribed from all WhatsApp and email alerts', 'info');
+  },
+
+  resubscribeAlerts: async () => {
+    const updates: Partial<UserProfile> = {
+      whatsappAlertsOptOut: false,
+      emailAlertsOptOut: false,
+      allNotificationsUnsubscribed: false,
+    };
+    get().updateProfile(updates);
+    const targetUid = get().firebaseUser?.uid;
+    if (targetUid) {
+      await updateUserProfileInFirestore(targetUid, updates).catch(() => null);
+    }
+    const audit = createAuditEntry('Resubscribed to Health Alert Notifications', 'SECURITY');
+    set((s) => ({
+      auditLogs: [audit, ...s.auditLogs],
+      autoWhatsAppTriggerEnabled: true
+    }));
+    get().showToast('Health alert notifications resubscribed successfully', 'success');
   },
 
   activeToast: null,

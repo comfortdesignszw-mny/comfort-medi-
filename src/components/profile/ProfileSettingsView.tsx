@@ -3,6 +3,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { exportHealthDataJSON, triggerBiometricAuthentication } from '../../lib/security';
 import { generateWhatsAppLink } from '../../lib/whatsappGateway';
 import { LegalModal } from '../legal/LegalModal';
+import { RenewalTermsModal } from '../subscription/RenewalTermsModal';
+import { SubscriptionTier } from '../../types';
 import { 
   User, 
   ShieldCheck, 
@@ -14,16 +16,24 @@ import {
   Fingerprint, 
   Check, 
   AlertCircle, 
-  X,
-  MessageSquare,
-  KeyRound,
-  Scale,
-  Trash2,
-  Database,
-  ShieldAlert,
-  Sparkles,
-  RefreshCw,
-  Loader2
+  X, 
+  MessageSquare, 
+  KeyRound, 
+  Scale, 
+  Trash2, 
+  Database, 
+  ShieldAlert, 
+  Sparkles, 
+  RefreshCw, 
+  Loader2,
+  CreditCard,
+  BellOff,
+  EyeOff,
+  Globe,
+  MapPin,
+  CheckCircle2,
+  Copyright,
+  CalendarCheck
 } from 'lucide-react';
 
 export const ProfileSettingsView: React.FC = () => {
@@ -46,10 +56,23 @@ export const ProfileSettingsView: React.FC = () => {
   const loadClinicalStarterTemplate = useAppStore(s => s.loadClinicalStarterTemplate);
   const fullStoreState = useAppStore.getState();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'emergency' | 'security' | 'audit_whatsapp'>('profile');
+  // Subscription and Communication Preferences Hooks
+  const showRenewalTermsModal = useAppStore(s => s.showRenewalTermsModal);
+  const setShowRenewalTermsModal = useAppStore(s => s.setShowRenewalTermsModal);
+  const toggleWhatsAppOptOut = useAppStore(s => s.toggleWhatsAppOptOut);
+  const toggleEmailOptOut = useAppStore(s => s.toggleEmailOptOut);
+  const unsubscribeAllAlerts = useAppStore(s => s.unsubscribeAllAlerts);
+  const resubscribeAlerts = useAppStore(s => s.resubscribeAlerts);
+  const updateSubscription = useAppStore(s => s.updateSubscription);
+  const cancelSubscriptionAutoRenewal = useAppStore(s => s.cancelSubscriptionAutoRenewal);
+
+  const [activeTab, setActiveTab] = useState<'profile' | 'subscription' | 'communications' | 'emergency' | 'security' | 'audit_whatsapp'>('profile');
+  const [selectedTierForRenewalModal, setSelectedTierForRenewalModal] = useState<SubscriptionTier>('pro');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState(userProfile);
   const [showLegalModal, setShowLegalModal] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState<'privacy' | 'terms' | 'rights' | 'dmca'>('privacy');
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -106,10 +129,10 @@ export const ProfileSettingsView: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 bg-slate-200/60 p-1 rounded-2xl text-xs">
+      <div className="flex gap-1.5 bg-slate-200/60 p-1 rounded-2xl text-xs overflow-x-auto">
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex-1 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition ${
+          className={`flex-1 py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
             activeTab === 'profile' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -117,8 +140,26 @@ export const ProfileSettingsView: React.FC = () => {
           <span>Patient Info</span>
         </button>
         <button
+          onClick={() => setActiveTab('subscription')}
+          className={`flex-1 py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
+            activeTab === 'subscription' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5 text-teal-600" />
+          <span>Pro Plans &amp; Renewal</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('communications')}
+          className={`flex-1 py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
+            activeTab === 'communications' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <BellOff className="w-3.5 h-3.5 text-amber-600" />
+          <span>Unsubscribe &amp; Address</span>
+        </button>
+        <button
           onClick={() => setActiveTab('emergency')}
-          className={`flex-1 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition ${
+          className={`flex-1 py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
             activeTab === 'emergency' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -127,21 +168,21 @@ export const ProfileSettingsView: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('security')}
-          className={`flex-1 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition ${
+          className={`flex-1 py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
             activeTab === 'security' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Security &amp; PIN</span>
+          <span>Security &amp; Policy</span>
         </button>
         <button
           onClick={() => setActiveTab('audit_whatsapp')}
-          className={`flex-1 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 transition ${
+          className={`flex-1 py-2 px-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
             activeTab === 'audit_whatsapp' ? 'bg-white text-teal-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Audit &amp; WhatsApp</span>
+          <span>WhatsApp Outbox</span>
         </button>
       </div>
 
@@ -316,6 +357,33 @@ export const ProfileSettingsView: React.FC = () => {
             </div>
           )}
 
+          {/* Legal Age Gate & Guardian Supervision Status */}
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="p-3.5 rounded-2xl bg-teal-50/80 border border-teal-200 text-teal-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-teal-700 tracking-wider block">
+                  Statutory Age Gate &amp; Legal Guardian Status
+                </span>
+                <h4 className="font-bold text-sm text-teal-900 mt-0.5">
+                  {userProfile.isGuardianManaged
+                    ? `Juvenile Dependent (Supervised by ${userProfile.guardianName || 'Parent / Legal Guardian'})`
+                    : `Verified Adult Account (> 16 Years of Age)`}
+                </h4>
+                <p className="text-[11px] text-teal-800 mt-0.5">
+                  {userProfile.dateOfBirth ? `Date of Birth: ${userProfile.dateOfBirth}` : 'Age eligibility verified'}
+                  {userProfile.guardianContact ? ` • Guardian Contact: ${userProfile.guardianContact}` : ''}
+                </p>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 self-start sm:self-auto ${
+                userProfile.isGuardianManaged
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                  : 'bg-emerald-600 text-white'
+              }`}>
+                {userProfile.isGuardianManaged ? 'Guardian Administered' : 'Age Verified (>16)'}
+              </span>
+            </div>
+          </div>
+
           {/* Chronic Conditions & Known Allergies section in Profile */}
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
             <div>
@@ -349,6 +417,354 @@ export const ProfileSettingsView: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: PRO SUBSCRIPTION & RENEWAL TERMS */}
+      {activeTab === 'subscription' && (
+        <div className="space-y-4 animate-in fade-in">
+          {/* Current Plan Overview Card */}
+          <div className="rounded-3xl bg-gradient-to-r from-[#0a2540] via-teal-950 to-teal-900 text-white p-5 sm:p-6 shadow-md border border-teal-500/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] font-bold text-teal-300 uppercase tracking-widest block">
+                  Active Subscription Tier
+                </span>
+                <h3 className="text-xl font-black text-white mt-0.5">
+                  {userProfile.subscriptionTier === 'family_pro'
+                    ? 'Family & Clinic Care Pro Tier'
+                    : userProfile.subscriptionTier === 'pro'
+                    ? 'Comfort Medi+ Pro Adherence Tier'
+                    : 'Standard Free Care Tier'}
+                </h3>
+                <p className="text-xs text-teal-200/90 mt-1">
+                  {userProfile.autoRenew 
+                    ? `Continuous billing active • Next renewal: ${userProfile.subscriptionRenewalDate || 'End of month'}`
+                    : 'Auto-renewal is currently turned off'}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTierForRenewalModal(userProfile.subscriptionTier || 'pro');
+                    setShowRenewalTermsModal(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-md shadow-teal-500/25 transition active:scale-95"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Renewal Terms</span>
+                </button>
+                {userProfile.autoRenew && (
+                  <button
+                    type="button"
+                    onClick={cancelSubscriptionAutoRenewal}
+                    className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition"
+                  >
+                    Cancel Auto-Renewal
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Billing Cycle Selector */}
+          <div className="flex items-center justify-center gap-2 p-1.5 bg-slate-200/70 rounded-2xl max-w-xs mx-auto text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setBillingCycle('monthly')}
+              className={`flex-1 py-1.5 rounded-xl transition ${billingCycle === 'monthly' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600'}`}
+            >
+              Monthly Billing
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingCycle('yearly')}
+              className={`flex-1 py-1.5 rounded-xl transition ${billingCycle === 'yearly' ? 'bg-white text-teal-900 shadow-sm' : 'text-slate-600'}`}
+            >
+              Annual Billing <span className="text-[10px] text-emerald-700 font-extrabold">(Save 18%)</span>
+            </button>
+          </div>
+
+          {/* Pricing Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Card 1: Pro Adherence */}
+            <div className={`p-5 rounded-3xl border bg-white shadow-sm flex flex-col justify-between space-y-4 ${
+              userProfile.subscriptionTier === 'pro' ? 'border-teal-500 ring-2 ring-teal-500/20' : 'border-slate-200'
+            }`}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
+                    Individual Care
+                  </span>
+                  <div className="text-right">
+                    <span className="text-xl font-black text-slate-900">
+                      {billingCycle === 'yearly' ? '$49' : '$4.99'}
+                    </span>
+                    <span className="text-slate-500 text-xs">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
+                  </div>
+                </div>
+
+                <h4 className="text-base font-black text-slate-900">Comfort Medi+ Pro Adherence</h4>
+                <p className="text-xs text-slate-600">
+                  Comprehensive automated WhatsApp direct messaging, clinical doctor synchronization, and smart medication refill prediction.
+                </p>
+
+                <ul className="text-xs space-y-2 text-slate-700 pt-2 border-t border-slate-100">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Auto-Fired WhatsApp Reminders (zero manual clicks)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Multi-turn AI Health Consultation Assistant</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Attending Physician Hospital Care Plan Integration</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Unlimited Encrypted Medical Records Vault</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateSubscription('pro', billingCycle, true)}
+                    className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-md shadow-teal-600/20 transition active:scale-95"
+                  >
+                    {userProfile.subscriptionTier === 'pro' ? 'Current Active Plan' : 'Select Pro Adherence'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTierForRenewalModal('pro');
+                      setShowRenewalTermsModal(true);
+                    }}
+                    className="px-3 py-2.5 rounded-xl border border-slate-300 hover:border-teal-500 text-slate-700 hover:text-teal-700 text-xs font-bold transition flex items-center gap-1"
+                    title="View explicit renewal terms"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Renewal Terms</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: Family & Clinic Care Pro */}
+            <div className={`p-5 rounded-3xl border bg-white shadow-sm flex flex-col justify-between space-y-4 ${
+              userProfile.subscriptionTier === 'family_pro' ? 'border-teal-500 ring-2 ring-teal-500/20' : 'border-slate-200'
+            }`}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    Family &amp; Clinic
+                  </span>
+                  <div className="text-right">
+                    <span className="text-xl font-black text-slate-900">
+                      {billingCycle === 'yearly' ? '$99' : '$9.99'}
+                    </span>
+                    <span className="text-slate-500 text-xs">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
+                  </div>
+                </div>
+
+                <h4 className="text-base font-black text-slate-900">Family &amp; Clinic Care Pro</h4>
+                <p className="text-xs text-slate-600">
+                  Full supervision for up to 5 family members, juvenile/minor guardian administration, and priority clinical tele-consultations.
+                </p>
+
+                <ul className="text-xs space-y-2 text-slate-700 pt-2 border-t border-slate-100">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Includes everything in Pro Adherence</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Parent/Guardian administration for up to 5 dependents</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Juvenile minor care oversight &amp; pediatric dosage tracking</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                    <span>Priority hospital appointment booking queue</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateSubscription('family_pro', billingCycle, true)}
+                    className="flex-1 py-2.5 rounded-xl bg-teal-900 hover:bg-slate-950 text-white text-xs font-bold shadow-md transition active:scale-95"
+                  >
+                    {userProfile.subscriptionTier === 'family_pro' ? 'Current Active Plan' : 'Select Family Care Pro'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTierForRenewalModal('family_pro');
+                      setShowRenewalTermsModal(true);
+                    }}
+                    className="px-3 py-2.5 rounded-xl border border-slate-300 hover:border-teal-500 text-slate-700 hover:text-teal-700 text-xs font-bold transition flex items-center gap-1"
+                    title="View explicit renewal terms"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
+                    <span>Renewal Terms</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: NOTIFICATION ALERTS UNSUBSCRIBE & REGISTERED ADDRESS */}
+      {activeTab === 'communications' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="rounded-3xl bg-white p-5 sm:p-6 border border-slate-200/80 shadow-sm space-y-4 text-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-700 border border-amber-500/20 flex items-center justify-center">
+                  <BellOff className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Notification Preferences &amp; Unsubscribe Controls
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Granular authority to silence or opt out of automated device alerts
+                  </p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                userProfile.allNotificationsUnsubscribed
+                  ? 'bg-rose-100 text-rose-700'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {userProfile.allNotificationsUnsubscribed ? 'Alerts Unsubscribed' : 'Active Delivery'}
+              </span>
+            </div>
+
+            <p className="text-slate-600 leading-relaxed">
+              We respect your peace of mind and personal device boundaries. In accordance with regional consumer protection and anti-spam regulations (CAN-SPAM, GDPR, and Zimbabwe Data Protection Act [Cap 11:12]), you can selectively silence specific channels or completely opt out with a single click.
+            </p>
+
+            <div className="space-y-3 pt-2">
+              {/* Channel 1: WhatsApp Reminders */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Automated WhatsApp Reminders</h4>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Direct messages sent to your WhatsApp number ({userProfile.phoneNumber || 'Not configured'}) for medications, appointments, and care tasks.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleWhatsAppOptOut(!userProfile.whatsappAlertsOptOut)}
+                  className={`px-3.5 py-2 rounded-xl font-bold text-xs transition shrink-0 ${
+                    userProfile.whatsappAlertsOptOut
+                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  }`}
+                >
+                  {userProfile.whatsappAlertsOptOut ? 'Opted Out (Muted)' : 'Active (Enabled)'}
+                </button>
+              </div>
+
+              {/* Channel 2: Email Alerts */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Email Health &amp; Adherence Digests</h4>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Periodic adherence summaries, appointment booking confirmations, and lab report availability notifications.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleEmailOptOut(!userProfile.emailAlertsOptOut)}
+                  className={`px-3.5 py-2 rounded-xl font-bold text-xs transition shrink-0 ${
+                    userProfile.emailAlertsOptOut
+                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  }`}
+                >
+                  {userProfile.emailAlertsOptOut ? 'Opted Out (Muted)' : 'Active (Enabled)'}
+                </button>
+              </div>
+
+              {/* Master 1-Click Unsubscribe Button */}
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="font-bold text-rose-950 text-sm">Master Communication Opt-Out</h4>
+                    <p className="text-rose-800 text-[11px] mt-0.5">
+                      Unsubscribe from ALL automated WhatsApp direct messages and email alerts instantly across all devices.
+                    </p>
+                  </div>
+                  {userProfile.allNotificationsUnsubscribed ? (
+                    <button
+                      type="button"
+                      onClick={resubscribeAlerts}
+                      className="px-4 py-2 rounded-xl bg-teal-600 text-white font-bold text-xs hover:bg-teal-700 shadow-sm transition shrink-0"
+                    >
+                      Resubscribe All Alerts
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={unsubscribeAllAlerts}
+                      className="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 shadow-sm shadow-rose-600/20 transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                    >
+                      <BellOff className="w-3.5 h-3.5" />
+                      <span>Unsubscribe All Alerts</span>
+                    </button>
+                  )}
+                </div>
+
+                {userProfile.unsubscribeTimestamp && (
+                  <p className="text-[10px] text-rose-700">
+                    Last unsubscribed: {new Date(userProfile.unsubscribeTimestamp).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Statutory Registered Postal & Contact Address */}
+            <div className="pt-4 border-t border-slate-200 text-xs text-slate-600 space-y-2">
+              <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                <MapPin className="w-4 h-4 text-teal-700" />
+                <span>Statutory Physical Operations &amp; Communications Address:</span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+                <strong className="text-slate-900 block font-bold">
+                  Comfort Medi+ Health Informatics Ltd
+                </strong>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Registered Medical Chambers, Suite 402, 128 Herbert Chitepo Avenue, Harare, Zimbabwe
+                  <br />
+                  Postal: P.O. Box CY 1420, Causeway, Harare
+                  <br />
+                  Healthcare Compliance Hotline: <strong>+263 77 282 4132</strong>
+                  <br />
+                  Official Unsubscribe &amp; Compliance Email:{' '}
+                  <a href="mailto:compliance@comfortmedi.health" className="text-teal-700 font-bold underline">
+                    compliance@comfortmedi.health
+                  </a>{' '}
+                  / <a href="mailto:comfort.designszw@gmail.com" className="text-teal-700 font-bold underline">
+                    comfort.designszw@gmail.com
+                  </a>
+                </p>
               </div>
             </div>
           </div>
@@ -425,9 +841,79 @@ export const ProfileSettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: SECURITY & PIN */}
+      {/* TAB 3: SECURITY & COMPLIANCE */}
       {activeTab === 'security' && (
         <div className="space-y-4">
+          {/* Zero Session Replay Architecture Card */}
+          <div className="rounded-3xl bg-slate-900 text-white p-5 border border-slate-800 shadow-md space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center">
+                  <EyeOff className="w-5 h-5 text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Zero Session Replay Architecture</h3>
+                  <p className="text-[11px] text-teal-200/80">Strictly blocked &amp; off • Zero screen recording</p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
+                Session Replay: Blocked
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Comfort Medi+ strictly disallows and blocks all session replay tools (such as LogRocket, Hotjar, FullStory, or Clarity). Your sensitive health dashboard, medication dosages, and medical reports are <strong>never screen-recorded or keystroke-monitored</strong>.
+            </p>
+          </div>
+
+          {/* Self-Hosted Local Fonts / Zero IP Leaks Card */}
+          <div className="rounded-3xl bg-emerald-50 border border-emerald-200 p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600/10 text-emerald-800 flex items-center justify-center">
+                  <Globe className="w-5 h-5 text-emerald-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-emerald-950">Self-Hosted Typography (Zero IP Address Leaks)</h3>
+                  <p className="text-[11px] text-emerald-800">100% native system font stacks • No external font CDN</p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold">
+                Zero IP Leaks
+              </span>
+            </div>
+            <p className="text-xs text-emerald-900/90 leading-relaxed">
+              Unlike typical web apps that download fonts from Google servers (exposing patient IP addresses and browsing timestamps to remote analytics), Comfort Medi+ renders typefaces exclusively through local system font stacks. Zero third-party font calls are made.
+            </p>
+          </div>
+
+          {/* DMCA Copyright Agent Card */}
+          <div className="rounded-3xl bg-white p-5 border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center">
+                  <Copyright className="w-5 h-5 text-teal-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">DMCA Copyright Agent &amp; Upload Non-Liability</h3>
+                  <p className="text-[11px] text-slate-500">Designated Agent filed • Statutory Safe Harbor</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setLegalModalTab('dmca');
+                  setShowLegalModal(true);
+                }}
+                className="px-3 py-1.5 rounded-xl border border-teal-500 text-teal-700 hover:bg-teal-50 text-xs font-bold transition"
+              >
+                View Filing Info
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Registered DMCA Agent: <strong>Copyright Compliance Officer, Suite 402, Medical Chambers, 128 Herbert Chitepo Ave, Harare</strong>. The app developers and host systems are not liable for files uploaded by users that violate copyright laws.
+            </p>
+          </div>
+
           {/* AES Encryption Status */}
           <div className="rounded-3xl bg-white p-5 border border-slate-200/80 shadow-sm space-y-3">
             <div className="flex items-center gap-2.5 text-teal-700">
@@ -884,11 +1370,19 @@ export const ProfileSettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: LEGAL & DATA PRIVACY POLICY */}
+      {/* MODAL: PRO SUBSCRIPTION RENEWAL TERMS */}
+      <RenewalTermsModal
+        isOpen={showRenewalTermsModal}
+        onClose={() => setShowRenewalTermsModal(false)}
+        selectedTier={selectedTierForRenewalModal}
+        billingCycle={billingCycle}
+      />
+
+      {/* MODAL: LEGAL, DMCA & DATA PRIVACY POLICY */}
       <LegalModal
         isOpen={showLegalModal}
         onClose={() => setShowLegalModal(false)}
-        defaultTab="rights"
+        defaultTab={legalModalTab}
       />
 
     </div>

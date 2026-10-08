@@ -46,6 +46,27 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   insuranceProvider: 'None / Private Pay',
   insurancePolicyNumber: '',
   primaryHealthcareProvider: '',
+
+  // Age Gate & Legal Status
+  ageVerified: false,
+  isGuardianManaged: false,
+  guardianName: '',
+  guardianContact: '',
+
+  // Unsubscribe & Communications
+  whatsappAlertsOptOut: false,
+  emailAlertsOptOut: false,
+  allNotificationsUnsubscribed: false,
+
+  // Subscription & Auto-Renewal
+  subscriptionTier: 'free',
+  subscriptionBillingCycle: 'monthly',
+  subscriptionRenewalTermsAccepted: false,
+  autoRenew: false,
+
+  // Security & DMCA
+  sessionReplayBlocked: true,
+  dmcaDisclaimerAcknowledged: true,
 };
 
 export const INITIAL_EMERGENCY_CONTACTS: EmergencyContact[] = [];

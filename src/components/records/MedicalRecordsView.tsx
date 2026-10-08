@@ -720,6 +720,16 @@ export const MedicalRecordsView: React.FC = () => {
                 />
               </div>
 
+              {/* DMCA & User-Uploaded Copyright Non-Liability Disclaimer */}
+              <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-950 text-[11px] space-y-1.5">
+                <div className="flex items-start gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="leading-tight">
+                    <strong className="text-amber-900">DMCA &amp; Copyright Liability Notice:</strong> By uploading this file or image, you certify you hold lawful ownership or clinical authorization. The system developers and platform hosts are <strong>not liable for user-uploaded files</strong> that infringe copyright laws. Designated DMCA Agent filed under 17 U.S.C. § 512(c).
+                  </p>
+                </div>
+              </div>
+
               <div className="pt-3 flex gap-2">
                 <button
                   type="button"

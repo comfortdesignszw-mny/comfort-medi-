@@ -7,7 +7,9 @@ import {
   loginWithPhone, 
   registerWithPhone,
   ADMIN_EMAIL,
-  normalizePhoneNumber
+  normalizePhoneNumber,
+  calculateAge,
+  isStrictlyAboveAge
 } from '../../lib/authService';
 import { 
   ShieldCheck, 
@@ -21,9 +23,135 @@ import {
   Loader2,
   Scale,
   Eye,
-  EyeOff
+  EyeOff,
+  Calendar,
+  Users,
+  ShieldAlert
 } from 'lucide-react';
 import { LegalModal } from '../legal/LegalModal';
+
+const AgeGateSection: React.FC<{
+  dateOfBirth: string;
+  setDateOfBirth: (val: string) => void;
+  isGuardianManaged: boolean;
+  setIsGuardianManaged: (val: boolean) => void;
+  guardianName: string;
+  setGuardianName: (val: string) => void;
+  guardianContact: string;
+  setGuardianContact: (val: string) => void;
+}> = ({
+  dateOfBirth,
+  setDateOfBirth,
+  isGuardianManaged,
+  setIsGuardianManaged,
+  guardianName,
+  setGuardianName,
+  guardianContact,
+  setGuardianContact,
+}) => {
+  const calculatedAge = dateOfBirth ? calculateAge(dateOfBirth) : null;
+  const isJuvenile = calculatedAge !== null && calculatedAge <= 16;
+  const isAdultEligible = calculatedAge !== null && calculatedAge > 16;
+
+  return (
+    <div className="space-y-2 pt-2 border-t border-slate-100">
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-bold text-slate-700 block">
+          Date of Birth <span className="text-rose-500">*</span>
+        </label>
+        <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+          Age Gate: Older than 16 yrs
+        </span>
+      </div>
+
+      <div className="relative">
+        <input
+          type="date"
+          required
+          max={new Date().toISOString().split('T')[0]}
+          value={dateOfBirth}
+          onChange={(e) => setDateOfBirth(e.target.value)}
+          className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-none focus:ring-2 ${
+            isJuvenile && !isGuardianManaged
+              ? 'border-amber-400 bg-amber-50/30 focus:ring-amber-500'
+              : 'border-slate-200 focus:ring-teal-500'
+          }`}
+        />
+      </div>
+
+      {/* Dynamic Age Evaluation Feedback */}
+      {isAdultEligible && (
+        <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] flex items-center gap-1.5 animate-in fade-in">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span>
+            Verified Age: <strong>{calculatedAge} years old</strong>. Eligible for independent account.
+          </span>
+        </div>
+      )}
+
+      {isJuvenile && (
+        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-2.5 animate-in fade-in">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <h5 className="font-bold text-xs text-amber-900">
+                Age Restriction: Independent Signup Denied ({calculatedAge} years old)
+              </h5>
+              <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                Comfort Medi+ requires independent users to be older than 16 years of age in accordance with healthcare privacy standards and the Zimbabwe Data Protection Act [Chapter 11:12]. 
+                <strong> Juveniles must have a parent or legal guardian create and manage their care account.</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-amber-200/80">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isGuardianManaged}
+                onChange={(e) => setIsGuardianManaged(e.target.checked)}
+                className="mt-0.5 rounded text-teal-600 focus:ring-teal-500 w-4 h-4 shrink-0"
+              />
+              <span className="text-[11px] font-bold text-amber-950 leading-tight">
+                I am a Parent / Legal Guardian creating &amp; supervising this account on behalf of this minor
+              </span>
+            </label>
+          </div>
+
+          {isGuardianManaged && (
+            <div className="space-y-2 pt-1 pl-6">
+              <div>
+                <label className="text-[10px] font-bold text-amber-900 block mb-0.5">
+                  Parent / Legal Guardian Full Legal Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Memory Chitepo (Parent)"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-amber-900 block mb-0.5">
+                  Parent / Guardian Contact Phone or National ID (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="+263 77 ... or ID 63-123456-A-70"
+                  value={guardianContact}
+                  onChange={(e) => setGuardianContact(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const AuthModal: React.FC = () => {
   const showAuthModal = useAppStore(s => s.showAuthModal);
@@ -52,7 +180,16 @@ export const AuthModal: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showLegalModal, setShowLegalModal] = useState(false);
 
+  // Age gate states
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [isGuardianManaged, setIsGuardianManaged] = useState(false);
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianContact, setGuardianContact] = useState('');
+
   if (!showAuthModal) return null;
+
+  const calculatedAge = dateOfBirth ? calculateAge(dateOfBirth) : null;
+  const isJuvenileBlocked = Boolean(authMode === 'register' && dateOfBirth && calculatedAge !== null && calculatedAge <= 16 && !isGuardianManaged);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -85,15 +222,44 @@ export const AuthModal: React.FC = () => {
     setErrorMsg(null);
     try {
       if (authMode === 'register') {
-        if (!fullName) {
-          setErrorMsg('Please enter your full name.');
+        if (!fullName.trim()) {
+          setErrorMsg('Please enter your full legal name.');
           setIsLoading(false);
           return;
         }
-        const user = await registerWithEmail(email, password, fullName, phoneNumber);
+        if (!dateOfBirth) {
+          setErrorMsg('Please enter your Date of Birth to verify age eligibility (Must be older than 16 years).');
+          setIsLoading(false);
+          return;
+        }
+        const age = calculateAge(dateOfBirth);
+        if (age <= 16 && !isGuardianManaged) {
+          setErrorMsg('Registration Denied: You must be older than 16 years of age to register independently. Please have your parent or legal guardian create and administer your account.');
+          setIsLoading(false);
+          return;
+        }
+        if (isGuardianManaged && !guardianName.trim()) {
+          setErrorMsg('Please enter the parent or legal guardian full legal name supervising this account.');
+          setIsLoading(false);
+          return;
+        }
+
+        const user = await registerWithEmail(
+          email, 
+          password, 
+          fullName, 
+          phoneNumber,
+          dateOfBirth,
+          { isGuardianManaged, guardianName, guardianContact }
+        );
         setFirebaseUser(user);
         setShowAuthModal(false);
-        showToast(`Account registered as ${user.role.toUpperCase()}`, 'success');
+        showToast(
+          isGuardianManaged
+            ? `Account registered under guardian administration (${guardianName})`
+            : `Account registered as ${user.role.toUpperCase()} (Age verified: ${age} yrs)`,
+          'success'
+        );
       } else {
         const user = await loginWithEmail(email, password);
         setFirebaseUser(user);
@@ -138,10 +304,38 @@ export const AuthModal: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        const user = await registerWithPhone(phoneNumber, password, fullName);
+        if (!dateOfBirth) {
+          setErrorMsg('Please enter your Date of Birth to verify age eligibility (Must be older than 16 years).');
+          setIsLoading(false);
+          return;
+        }
+        const age = calculateAge(dateOfBirth);
+        if (age <= 16 && !isGuardianManaged) {
+          setErrorMsg('Registration Denied: You must be older than 16 years of age to register independently. Please have your parent or legal guardian create and administer your account.');
+          setIsLoading(false);
+          return;
+        }
+        if (isGuardianManaged && !guardianName.trim()) {
+          setErrorMsg('Please enter the parent or legal guardian full legal name supervising this account.');
+          setIsLoading(false);
+          return;
+        }
+
+        const user = await registerWithPhone(
+          phoneNumber, 
+          password, 
+          fullName,
+          dateOfBirth,
+          { isGuardianManaged, guardianName, guardianContact }
+        );
         setFirebaseUser(user);
         setShowAuthModal(false);
-        showToast(`Account registered successfully as ${user.role.toUpperCase()}`, 'success');
+        showToast(
+          isGuardianManaged
+            ? `Phone account registered under guardian oversight (${guardianName})`
+            : `Account registered successfully as ${user.role.toUpperCase()} (Age verified: ${age} yrs)`,
+          'success'
+        );
       } else {
         const user = await loginWithPhone(phoneNumber, password);
         setFirebaseUser(user);
@@ -348,6 +542,20 @@ export const AuthModal: React.FC = () => {
                 </div>
               )}
 
+              {/* Age Restriction Gate for Registration */}
+              {authMode === 'register' && (
+                <AgeGateSection
+                  dateOfBirth={dateOfBirth}
+                  setDateOfBirth={setDateOfBirth}
+                  isGuardianManaged={isGuardianManaged}
+                  setIsGuardianManaged={setIsGuardianManaged}
+                  guardianName={guardianName}
+                  setGuardianName={setGuardianName}
+                  guardianContact={guardianContact}
+                  setGuardianContact={setGuardianContact}
+                />
+              )}
+
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
                   Password
@@ -368,16 +576,28 @@ export const AuthModal: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/20 flex items-center justify-center gap-1.5 active:scale-95 transition"
+                disabled={isLoading || isJuvenileBlocked}
+                className={`w-full py-2.5 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-95 transition ${
+                  isJuvenileBlocked 
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' 
+                    : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
+                }`}
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Processing...</span>
                   </>
+                ) : isJuvenileBlocked ? (
+                  <span>⛔ Minor Under 16 — Guardian Required to Register</span>
                 ) : (
-                  <span>{authMode === 'signin' ? 'Sign In with Email' : 'Create Patient Account'}</span>
+                  <span>
+                    {authMode === 'signin' 
+                      ? 'Sign In with Email' 
+                      : isGuardianManaged 
+                        ? 'Register Guardian Managed Account' 
+                        : 'Create Patient Account'}
+                  </span>
                 )}
               </button>
             </form>
@@ -426,6 +646,20 @@ export const AuthModal: React.FC = () => {
                 </div>
               </div>
 
+              {/* Age Restriction Gate for Phone Registration */}
+              {authMode === 'register' && (
+                <AgeGateSection
+                  dateOfBirth={dateOfBirth}
+                  setDateOfBirth={setDateOfBirth}
+                  isGuardianManaged={isGuardianManaged}
+                  setIsGuardianManaged={setIsGuardianManaged}
+                  guardianName={guardianName}
+                  setGuardianName={setGuardianName}
+                  guardianContact={guardianContact}
+                  setGuardianContact={setGuardianContact}
+                />
+              )}
+
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
                   Password
@@ -454,16 +688,28 @@ export const AuthModal: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isLoading}
-                className="w-full py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-600/20 flex items-center justify-center gap-1.5 active:scale-95 transition"
+                disabled={isLoading || isJuvenileBlocked}
+                className={`w-full py-2.5 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-1.5 active:scale-95 transition ${
+                  isJuvenileBlocked 
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none' 
+                    : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/20'
+                }`}
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span>Validating Phone ID...</span>
                   </>
+                ) : isJuvenileBlocked ? (
+                  <span>⛔ Minor Under 16 — Guardian Required to Register</span>
                 ) : (
-                  <span>{authMode === 'signin' ? 'Sign In with Phone' : 'Register with Phone ID'}</span>
+                  <span>
+                    {authMode === 'signin' 
+                      ? 'Sign In with Phone' 
+                      : isGuardianManaged 
+                        ? 'Register Guardian Managed Account' 
+                        : 'Register with Phone ID'}
+                  </span>
                 )}
               </button>
             </form>
@@ -481,6 +727,14 @@ export const AuthModal: React.FC = () => {
               </button>{' '}
               under the Zimbabwe Data Protection Act [Chapter 11:12].
             </p>
+            <div className="pt-2 text-[10px] text-slate-400 space-y-0.5 border-t border-slate-100">
+              <p className="text-slate-500 font-medium">
+                Registered Office: Suite 402, Medical Chambers, 128 Herbert Chitepo Ave, Harare, Zimbabwe
+              </p>
+              <p className="text-[9px] text-slate-400">
+                Zero Session Replay • Self-Hosted System Fonts (Zero IP Leaks) • DMCA Safe Harbor Agent Registered
+              </p>
+            </div>
             <div>
               <button
                 type="button"

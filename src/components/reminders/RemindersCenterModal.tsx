@@ -53,6 +53,8 @@ export const RemindersCenterModal: React.FC<RemindersCenterModalProps> = ({
   const markMedicationTaken = useAppStore(s => s.markMedicationTaken);
   const toggleCareTask = useAppStore(s => s.toggleCareTask);
   const showToast = useAppStore(s => s.showToast);
+  const toggleWhatsAppOptOut = useAppStore(s => s.toggleWhatsAppOptOut);
+  const unsubscribeAllAlerts = useAppStore(s => s.unsubscribeAllAlerts);
 
   // Auto WhatsApp Trigger Store Bindings
   const autoWhatsAppTriggerEnabled = useAppStore(s => s.autoWhatsAppTriggerEnabled);
